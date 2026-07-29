@@ -1,0 +1,559 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>公辅设备共享管理</title>
+<style>
+  :root {
+    --primary: #1a1a1a;
+    --secondary: #666;
+    --muted: #999;
+    --light: #f5f5f5;
+    --border: #e8e8e8;
+    --green: #2e7d32;
+    --green-bg: rgba(46,125,50,0.08);
+    --orange: #e65100;
+    --orange-bg: rgba(230,81,0,0.08);
+    --red: #c62828;
+    --red-bg: rgba(198,40,40,0.08);
+    --blue: #1565c0;
+    --blue-bg: rgba(21,101,192,0.08);
+    --radius: 10px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #fafafa;
+    color: var(--primary);
+    max-width: 430px;
+    margin: 0 auto;
+    min-height: 100vh;
+    padding-bottom: 80px;
+  }
+  .header {
+    background: #fff;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-top { display: flex; justify-content: space-between; align-items: center; }
+  .header-title { font-size: 18px; font-weight: 600; }
+  .header-time { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .header-sub { font-size: 12px; color: var(--secondary); margin-top: 4px; }
+  .page { display: none; padding: 16px 16px 24px; }
+  .page.active { display: block; }
+  .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .device-card {
+    background: #fff; border-radius: var(--radius); padding: 16px;
+    box-shadow: var(--shadow); border: 1px solid var(--border);
+    cursor: pointer; transition: transform 0.15s;
+  }
+  .device-card:active { transform: scale(0.98); }
+  .device-card.busy { border-left: 3px solid var(--orange); }
+  .device-card.idle { border-left: 3px solid var(--green); }
+  .device-name { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .device-info { font-size: 12px; color: var(--secondary); line-height: 1.6; }
+  .device-status {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; font-weight: 500; padding: 3px 10px;
+    border-radius: 6px; margin-top: 10px;
+  }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .status-idle { background: var(--green-bg); color: var(--green); }
+  .status-idle .status-dot { background: var(--green); }
+  .status-busy { background: var(--orange-bg); color: var(--orange); }
+  .status-busy .status-dot { background: var(--orange); }
+  .section-title {
+    font-size: 14px; font-weight: 600; color: var(--secondary);
+    margin: 20px 0 10px; display: flex; align-items: center; gap: 6px;
+  }
+  .section-title::before {
+    content: ''; display: inline-block; width: 3px; height: 14px;
+    background: var(--primary); border-radius: 2px;
+  }
+  .timeline {
+    background: #fff; border-radius: var(--radius);
+    box-shadow: var(--shadow); border: 1px solid var(--border); overflow: hidden;
+  }
+  .timeline-row {
+    display: flex; align-items: center; padding: 10px 14px;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .timeline-row:last-child { border-bottom: none; }
+  .timeline-time { width: 80px; font-weight: 500; color: var(--secondary); flex-shrink: 0; }
+  .timeline-content { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .timeline-chip { font-size: 11px; padding: 2px 8px; border-radius: 4px; display: inline-block; width: fit-content; }
+  .chip-chiller { background: var(--blue-bg); color: var(--blue); }
+  .chip-compressor { background: var(--orange-bg); color: var(--orange); }
+  .chip-empty { background: var(--light); color: var(--muted); }
+  .fab {
+    position: fixed; bottom: 90px; right: 20px; width: 52px; height: 52px;
+    border-radius: 50%; background: var(--primary); color: #fff; border: none;
+    font-size: 24px; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer; z-index: 200;
+  }
+  .fab:active { transform: scale(0.92); }
+  .form-card {
+    background: #fff; border-radius: var(--radius); padding: 20px;
+    box-shadow: var(--shadow); border: 1px solid var(--border);
+  }
+  .form-group { margin-bottom: 16px; }
+  .form-label { display: block; font-size: 13px; color: var(--secondary); margin-bottom: 6px; font-weight: 500; }
+  .form-input, .form-select {
+    width: 100%; padding: 11px 14px; border: 1px solid var(--border);
+    border-radius: 8px; font-size: 15px; background: #fff; color: var(--primary);
+    -webkit-appearance: none; appearance: none;
+  }
+  .form-input:focus, .form-select:focus { outline: none; border-color: var(--primary); }
+  .time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn-primary {
+    width: 100%; padding: 13px; border: none; border-radius: 8px;
+    background: var(--primary); color: #fff; font-size: 15px;
+    font-weight: 600; cursor: pointer; margin-top: 4px;
+  }
+  .btn-primary:active { opacity: 0.9; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .alert {
+    padding: 12px 14px; border-radius: 8px; font-size: 13px;
+    margin-bottom: 16px; display: none; line-height: 1.5;
+  }
+  .alert.show { display: block; }
+  .alert-ok { background: var(--green-bg); color: var(--green); border: 1px solid rgba(46,125,50,0.2); }
+  .alert-warn { background: var(--red-bg); color: var(--red); border: 1px solid rgba(198,40,40,0.2); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.6; padding: 10px; background: var(--light); border-radius: 6px; }
+  .record-list { margin-top: 8px; }
+  .record-item {
+    background: #fff; border-radius: var(--radius); padding: 14px 16px;
+    margin-bottom: 10px; box-shadow: var(--shadow); border: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .record-left { flex: 1; }
+  .record-dept { font-size: 14px; font-weight: 600; }
+  .record-time { font-size: 12px; color: var(--secondary); margin-top: 3px; }
+  .record-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .record-right { text-align: right; }
+  .record-device { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--light); color: var(--secondary); }
+  .record-status { font-size: 11px; padding: 2px 8px; border-radius: 4px; margin-top: 6px; display: inline-block; }
+  .tag-active { background: var(--orange-bg); color: var(--orange); }
+  .tag-done { background: var(--green-bg); color: var(--green); }
+  .tag-future { background: var(--blue-bg); color: var(--blue); }
+  .tag-conflict { background: var(--red-bg); color: var(--red); }
+  .record-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .record-actions button { font-size: 12px; padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: #fff; cursor: pointer; color: var(--secondary); }
+  .record-actions .btn-end { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .record-actions .btn-shutdown { background: var(--red-bg); color: var(--red); border-color: rgba(198,40,40,0.3); }
+  .empty { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; }
+  .tabbar {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 430px; background: #fff;
+    border-top: 1px solid var(--border); display: flex;
+    justify-content: space-around; padding: 6px 0 10px; z-index: 200;
+  }
+  .tabbar-item { flex: 1; text-align: center; cursor: pointer; padding: 4px 0; color: var(--muted); font-size: 11px; transition: color 0.2s; }
+  .tabbar-item.active { color: var(--primary); font-weight: 600; }
+  .tabbar-icon { width: 24px; height: 24px; margin: 0 auto 2px; display: flex; align-items: center; justify-content: center; }
+  .modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.45); display: none;
+    align-items: center; justify-content: center; z-index: 300; padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: #fff; border-radius: 14px; width: 100%;
+    max-width: 340px; padding: 24px; animation: modalIn 0.2s ease-out;
+  }
+  @keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+  .modal-title { font-size: 17px; font-weight: 600; margin-bottom: 12px; }
+  .modal-body { font-size: 14px; color: var(--secondary); line-height: 1.6; margin-bottom: 20px; }
+  .modal-actions { display: flex; gap: 10px; }
+  .modal-actions button { flex: 1; padding: 11px; border-radius: 8px; font-size: 14px; cursor: pointer; border: none; }
+  .modal-cancel { background: var(--light); color: var(--primary); }
+  .modal-confirm { background: var(--primary); color: #fff; }
+  .rule-card {
+    background: #fff; border-radius: var(--radius); padding: 16px;
+    margin-bottom: 12px; box-shadow: var(--shadow); border: 1px solid var(--border);
+  }
+  .rule-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .rule-text { font-size: 13px; color: var(--secondary); line-height: 1.8; }
+  .conflict-list { margin: 10px 0; }
+  .conflict-item { background: var(--red-bg); border: 1px solid rgba(198,40,40,0.15); border-radius: 6px; padding: 8px 12px; margin-bottom: 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="header-title" id="pageTitle">设备状态</div>
+    <div class="header-time" id="clock">--:--:--</div>
+  </div>
+  <div class="header-sub" id="pageSub">实时查看冷水机与空压机使用状态</div>
+</div>
+
+<div class="page active" id="page-home">
+  <div class="device-grid">
+    <div class="device-card idle" id="card-chiller" onclick="showDeviceDetail('\u51b7\u6c34\u673a')">
+      <div class="device-name">冷水机</div>
+      <div class="device-info" id="info-chiller">当前空闲<br>无待办登记</div>
+      <div class="device-status status-idle" id="badge-chiller"><span class="status-dot"></span>空闲</div>
+    </div>
+    <div class="device-card idle" id="card-compressor" onclick="showDeviceDetail('\u7a7a\u538b\u673a')">
+      <div class="device-name">空压机</div>
+      <div class="device-info" id="info-compressor">当前空闲<br>无待办登记</div>
+      <div class="device-status status-idle" id="badge-compressor"><span class="status-dot"></span>空闲</div>
+    </div>
+  </div>
+  <div class="section-title">今日时段总览</div>
+  <div class="timeline" id="timeline"></div>
+  <div class="section-title">最近登记</div>
+  <div class="record-list" id="recentRecords"></div>
+</div>
+
+<div class="page" id="page-register">
+  <div class="alert" id="regAlert"></div>
+  <div class="form-card">
+    <div class="form-group">
+      <label class="form-label">使用部门</label>
+      <select class="form-select" id="regDept">
+        <option value="生产测试">生产测试</option>
+        <option value="研发测试">研发测试</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">使用人</label>
+      <input type="text" class="form-input" id="regUser" placeholder="请输入姓名">
+    </div>
+    <div class="form-group">
+      <label class="form-label">选择设备</label>
+      <select class="form-select" id="regDevice">
+        <option value="冷水机">冷水机</option>
+        <option value="空压机">空压机</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">使用时段</label>
+      <div class="time-row">
+        <input type="time" class="form-input" id="regStart">
+        <input type="time" class="form-input" id="regEnd">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">备注（可选）</label>
+      <input type="text" class="form-input" id="regNote" placeholder="例如：温度循环试验需持续运行">
+    </div>
+    <button class="btn-primary" onclick="submitRegister()">提交登记</button>
+    <div class="hint">
+      <strong>使用规则：</strong><br>
+      ① 使用前必须登记时段<br>
+      ② 时段冲突时系统会提醒协调<br>
+      ③ 最后离开人员确认无后续使用后方可关机
+    </div>
+  </div>
+</div>
+
+<div class="page" id="page-records">
+  <div class="record-list" id="allRecords"></div>
+</div>
+
+<div class="page" id="page-rules">
+  <div class="rule-card">
+    <div class="rule-title">一、登记流程</div>
+    <div class="rule-text">
+      1. 使用设备前，打开本页面登记使用时段<br>
+      2. 填写部门、姓名、设备、计划起止时间<br>
+      3. 系统自动检测时段冲突，如有重叠会标红提醒<br>
+      4. 测试完成后，务必点击"结束使用"填写实际结束时间
+    </div>
+  </div>
+  <div class="rule-card">
+    <div class="rule-title">二、关机规则（核心！）</div>
+    <div class="rule-text">
+      <strong>谁最后，谁关机。</strong>严禁提前关机影响他人。<br><br>
+      工作结束前，先查看设备状态看板：<br>
+      • 若显示"可以关机" → 执行关机<br>
+      • 若显示"请勿关机"或存在后续登记 → 必须等待所有时段结束后方可关机<br>
+      • 最后离开人员负责关机，并在记录中确认
+    </div>
+  </div>
+  <div class="rule-card">
+    <div class="rule-title">三、冲突处理</div>
+    <div class="rule-text">
+      1. 发现时段冲突时，双方主动协商<br>
+      2. 优先保障已开机方完成当前测试循环<br>
+      3. 协商无果时，由测试主管/班组长根据项目紧急度仲裁
+    </div>
+  </div>
+  <div class="rule-card">
+    <div class="rule-title">四、状态颜色说明</div>
+    <div class="rule-text">
+      <span style="color:var(--green)">●</span> 绿色 = 空闲 / 无冲突 / 已完成<br>
+      <span style="color:var(--orange)">●</span> 橙色 = 进行中 / 使用中<br>
+      <span style="color:var(--red)">●</span> 红色 = 时段冲突 / 请勿关机<br>
+      <span style="color:var(--blue)">●</span> 蓝色 = 待开始
+    </div>
+  </div>
+</div>
+
+<button class="fab" onclick="goPage('register')">+</button>
+
+<div class="tabbar">
+  <div class="tabbar-item active" onclick="goPage('home')">
+    <div class="tabbar-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </div>
+    状态
+  </div>
+  <div class="tabbar-item" onclick="goPage('records')">
+    <div class="tabbar-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    </div>
+    记录
+  </div>
+  <div class="tabbar-item" onclick="goPage('rules')">
+    <div class="tabbar-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+    </div>
+    说明
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalBox">
+    <div class="modal-title" id="modalTitle">提示</div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-actions" id="modalActions">
+      <button class="modal-cancel" onclick="closeModal()">取消</button>
+      <button class="modal-confirm" id="modalConfirm" onclick="closeModal()">确定</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY='eqm_records_v3';
+let records=[];
+function loadData(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(raw) records=JSON.parse(raw);
+  }catch(e){}
+  if(records.length===0){
+    const today=formatDate(new Date());
+    records=[
+      {id:1,date:today,dept:'\u751f\u4ea7\u6d4b\u8bd5',user:'\u5f20\u4e09',device:'\u51b7\u6c34\u673a',start:'08:00',end:'12:00',actualEnd:'11:55',note:'\u4f8b\u884c\u6e29\u5faa\u8bd5\u9a8c',status:'done'},
+      {id:2,date:today,dept:'\u7814\u53d1\u6d4b\u8bd5',user:'\u674e\u56db',device:'\u7a7a\u538b\u673a',start:'09:00',end:'11:30',actualEnd:'',note:'\u6c14\u5bc6\u6027\u6d4b\u8bd5',status:'active'},
+      {id:3,date:today,dept:'\u7814\u53d1\u6d4b\u8bd5',user:'\u738b\u4e94',device:'\u51b7\u6c34\u673a',start:'14:00',end:'17:00',actualEnd:'',note:'\u65b0\u4ea7\u54c1\u9a8c\u8bc1',status:'future'},
+      {id:4,date:today,dept:'\u751f\u4ea7\u6d4b\u8bd5',user:'\u8d75\u516d',device:'\u7a7a\u538b\u673a',start:'11:00',end:'15:00',actualEnd:'',note:'\u4ea7\u7ebf\u8054\u8c03',status:'future'},
+      {id:5,date:today,dept:'\u7814\u53d1\u6d4b\u8bd5',user:'\u5b59\u4e03',device:'\u7a7a\u538b\u673a',start:'11:30',end:'13:00',actualEnd:'',note:'\u4e34\u65f6\u52a0\u6025\u6d4b\u8bd5',status:'future'}
+    ];
+    saveData();
+  }
+}
+function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify(records));}
+function pad(n){return String(n).padStart(2,'0');}
+function formatDate(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function formatTime(d){return pad(d.getHours())+':'+pad(d.getMinutes());}
+function timeToMin(t){const p=t.split(':');return parseInt(p[0])*60+parseInt(p[1]);}
+function overlaps(aS,aE,bS,bE){return timeToMin(aS)<timeToMin(bE)&&timeToMin(aE)>timeToMin(bS);}
+function getTodayRecords(){return records.filter(r=>r.date===formatDate(new Date()));}
+function getDeviceStatus(device){
+  const now=new Date();
+  const curMin=now.getHours()*60+now.getMinutes();
+  const todayRecs=getTodayRecords().filter(r=>r.device===device);
+  const active=todayRecs.find(r=>{
+    const s=timeToMin(r.start),e=timeToMin(r.end);
+    return s<=curMin&&(r.actualEnd?timeToMin(r.actualEnd)>curMin:e>curMin);
+  });
+  const future=todayRecs.filter(r=>timeToMin(r.start)>curMin&&!r.actualEnd);
+  return{active,future};
+}
+function goPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tabbar-item').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  const titles={home:'\u8bbe\u5907\u72b6\u6001',register:'\u4f7f\u7528\u767b\u8bb0',records:'\u4eca\u65e5\u8bb0\u5f55',rules:'\u4f7f\u7528\u8bf4\u660e'};
+  const subs={
+    home:'\u5b9e\u65f6\u67e5\u770b\u51b7\u6c34\u673a\u4e0e\u7a7a\u538b\u673a\u4f7f\u7528\u72b6\u6001',
+    register:'\u586b\u5199\u4f7f\u7528\u4fe1\u606f\uff0c\u7cfb\u7edf\u81ea\u52a8\u68c0\u6d4b\u65f6\u6bb5\u51b2\u7a81',
+    records:'\u67e5\u770b\u4eca\u65e5\u6240\u6709\u767b\u8bb0\u53ca\u5386\u53f2\u8bb0\u5f55',
+    rules:'\u7ba1\u7406\u5236\u5ea6\u4e0e\u64cd\u4f5c\u6d41\u7a0b\u8bf4\u660e'
+  };
+  document.getElementById('pageTitle').textContent=titles[name];
+  document.getElementById('pageSub').textContent=subs[name];
+  const idx={home:0,records:1,rules:2};
+  if(idx[name]!==undefined) document.querySelectorAll('.tabbar-item')[idx[name]].classList.add('active');
+  if(name==='home') renderHome();
+  if(name==='records') renderRecords();
+  if(name==='register') initRegister();
+}
+function renderHome(){
+  const now=new Date();
+  ['\u51b7\u6c34\u673a','\u7a7a\u538b\u673a'].forEach(dev=>{
+    const key=dev==='\u51b7\u6c34\u673a'?'chiller':'compressor';
+    const{active,future}=getDeviceStatus(dev);
+    const card=document.getElementById('card-'+key);
+    const info=document.getElementById('info-'+key);
+    const badge=document.getElementById('badge-'+key);
+    if(active){
+      card.className='device-card busy';
+      info.innerHTML=active.dept+' \u00b7 '+active.user+'<br>\u9884\u8ba1 '+active.end+' \u7ed3\u675f';
+      badge.className='device-status status-busy';
+      badge.innerHTML='<span class="status-dot"></span>\u4f7f\u7528\u4e2d';
+    }else if(future.length>0){
+      const next=future.sort((a,b)=>timeToMin(a.start)-timeToMin(b.start))[0];
+      card.className='device-card idle';
+      info.innerHTML='\u5f53\u524d\u7a7a\u95f2<br>\u4e0b\u4e00\u65f6\u6bb5 '+next.start+' ('+next.dept+')';
+      badge.className='device-status status-idle';
+      badge.innerHTML='<span class="status-dot"></span>\u7a7a\u95f2';
+    }else{
+      card.className='device-card idle';
+      info.innerHTML='\u5f53\u524d\u7a7a\u95f2<br>\u65e0\u5f85\u529e\u767b\u8bb0';
+      badge.className='device-status status-idle';
+      badge.innerHTML='<span class="status-dot"></span>\u7a7a\u95f2';
+    }
+  });
+  const slots=[];
+  for(let h=8;h<18;h+=2) slots.push(pad(h)+':00-'+pad(h+2)+':00');
+  const todayRecs=getTodayRecords();
+  let html='';
+  slots.forEach(slot=>{
+    const se=slot.split('-');
+    const chillerRecs=todayRecs.filter(r=>r.device==='\u51b7\u6c34\u673a'&&overlaps(se[0],se[1],r.start,r.end)&&!r.actualEnd);
+    const compRecs=todayRecs.filter(r=>r.device==='\u7a7a\u538b\u673a'&&overlaps(se[0],se[1],r.start,r.end)&&!r.actualEnd);
+    let chillerHtml='<span class="timeline-chip chip-empty">\u7a7a\u95f2</span>';
+    if(chillerRecs.length>0) chillerHtml=chillerRecs.map(r=>'<span class="timeline-chip chip-chiller">'+r.dept+' '+r.user+'</span>').join('');
+    let compHtml='<span class="timeline-chip chip-empty">\u7a7a\u95f2</span>';
+    if(compRecs.length>0) compHtml=compRecs.map(r=>'<span class="timeline-chip chip-compressor">'+r.dept+' '+r.user+'</span>').join('');
+    html+='<div class="timeline-row"><div class="timeline-time">'+slot+'</div><div class="timeline-content"><div>\u51b7\u6c34\u673a\uff1a'+chillerHtml+'</div><div>\u7a7a\u538b\u673a\uff1a'+compHtml+'</div></div></div>';
+  });
+  document.getElementById('timeline').innerHTML=html;
+  const recent=getTodayRecords().slice().reverse().slice(0,5);
+  renderRecordList('recentRecords',recent,true);
+}
+function renderRecordList(containerId,list,isCompact){
+  const container=document.getElementById(containerId);
+  if(list.length===0){container.innerHTML='<div class="empty">\u6682\u65e0\u8bb0\u5f55</div>';return;}
+  const now=new Date();
+  const curMin=now.getHours()*60+now.getMinutes();
+  container.innerHTML=list.map(r=>{
+    const sMin=timeToMin(r.start),eMin=timeToMin(r.end);
+    let statusClass='tag-future',statusText='\u5f85\u5f00\u59cb';
+    if(r.actualEnd){statusClass='tag-done';statusText='\u5df2\u5b8c\u6210';}
+    else if(sMin<=curMin&&eMin>curMin){statusClass='tag-active';statusText='\u8fdb\u884c\u4e2d';}
+    const conflicts=getTodayRecords().filter(o=>o.id!==r.id&&o.device===r.device&&overlaps(r.start,r.end,o.start,o.end));
+    const conflictTag=conflicts.length>0?'<span class="record-status tag-conflict" style="margin-left:4px;">\u51b2\u7a81</span>':'';
+    const actions=!isCompact?'<div class="record-actions">'+(r.actualEnd?'':'<button class="btn-end" onclick="endRecord('+r.id+')">\u7ed3\u675f\u4f7f\u7528</button>')+(r.actualEnd?'':'<button class="btn-shutdown" onclick="confirmShutdown('+r.id+')">\u786e\u8ba4\u5173\u673a</button>')+'</div>':'';
+    return'<div class="record-item"><div class="record-left"><div class="record-dept">'+r.dept+' \u00b7 '+r.user+'</div><div class="record-time">'+r.start+' - '+r.end+(r.actualEnd?' (\u5b9e\u9645\u7ed3\u675f: '+r.actualEnd+')':'')+'</div>'+(r.note?'<div class="record-note">'+r.note+'</div>':'')+actions+'</div><div class="record-right"><span class="record-device">'+r.device+'</span><div style="margin-top:4px;"><span class="record-status '+statusClass+'">'+statusText+'</span>'+conflictTag+'</div></div></div>';
+  }).join('');
+}
+function renderRecords(){renderRecordList('allRecords',getTodayRecords().slice().reverse(),false);}
+function initRegister(){
+  const now=new Date();
+  document.getElementById('regStart').value=formatTime(now);
+  document.getElementById('regEnd').value=formatTime(new Date(now.getTime()+2*60*60*1000));
+  document.getElementById('regUser').value='';
+  document.getElementById('regNote').value='';
+  hideAlert('regAlert');
+}
+function showAlert(id,msg,type){const el=document.getElementById(id);el.textContent=msg;el.className='alert show alert-'+type;}
+function hideAlert(id){document.getElementById(id).className='alert';}
+function submitRegister(){
+  const dept=document.getElementById('regDept').value;
+  const user=document.getElementById('regUser').value.trim();
+  const device=document.getElementById('regDevice').value;
+  const start=document.getElementById('regStart').value;
+  const end=document.getElementById('regEnd').value;
+  const note=document.getElementById('regNote').value.trim();
+  if(!user){showAlert('regAlert','\u8bf7\u8f93\u5165\u4f7f\u7528\u4eba\u59d3\u540d','warn');return;}
+  if(!start||!end){showAlert('regAlert','\u8bf7\u586b\u5199\u5b8c\u6574\u7684\u4f7f\u7528\u65f6\u6bb5','warn');return;}
+  if(timeToMin(start)>=timeToMin(end)){showAlert('regAlert','\u7ed3\u675f\u65f6\u95f4\u5fc5\u987b\u665a\u4e8e\u5f00\u59cb\u65f6\u95f4','warn');return;}
+  const todayRecs=getTodayRecords().filter(r=>r.device===device&&!r.actualEnd);
+  const conflicts=todayRecs.filter(r=>overlaps(start,end,r.start,r.end));
+  if(conflicts.length>0){
+    const html=conflicts.map(c=>'<div class="conflict-item">'+c.dept+' '+c.user+'\uff1a'+c.start+' - '+c.end+'</div>').join('');
+    showModal('\u65f6\u6bb5\u51b2\u7a81\u63d0\u9192','\u60a8\u767b\u8bb0\u7684\u65f6\u6bb5\u4e0e\u4ee5\u4e0b\u8bb0\u5f55\u91cd\u53e0\uff0c\u8bf7\u534f\u8c03\u6216\u9519\u5f00\u65f6\u6bb5\uff1a<div class="conflict-list">'+html+'</div>','\u4ecd\u8981\u767b\u8bb0',()=>doRegister(dept,user,device,start,end,note),true);
+    return;
+  }
+  doRegister(dept,user,device,start,end,note);
+}
+function doRegister(dept,user,device,start,end,note){
+  const today=formatDate(new Date());
+  records.push({id:Date.now(),date:today,dept,user,device,start,end,actualEnd:'',note,status:'future'});
+  saveData();
+  showAlert('regAlert','\u767b\u8bb0\u6210\u529f\uff01\u8bf7\u7559\u610f\u8bbe\u5907\u72b6\u6001\uff0c\u907f\u514d\u63d0\u524d\u5173\u673a\u5f71\u54cd\u4ed6\u4eba','ok');
+  setTimeout(()=>goPage('home'),1200);
+}
+function endRecord(id){
+  const r=records.find(x=>x.id===id);
+  if(!r) return;
+  r.actualEnd=formatTime(new Date());
+  r.status='done';
+  saveData();
+  renderRecords();
+  renderHome();
+  showAlert('regAlert','\u5df2\u8bb0\u5f55\u5b9e\u9645\u7ed3\u675f\u65f6\u95f4','ok');
+}
+function confirmShutdown(id){
+  const r=records.find(x=>x.id===id);
+  if(!r) return;
+  const todayRecs=getTodayRecords().filter(x=>x.device===r.device&&x.id!==r.id&&!x.actualEnd);
+  const nowMin=new Date().getHours()*60+new Date().getMinutes();
+  const hasOthers=todayRecs.some(x=>timeToMin(x.end)>nowMin);
+  if(hasOthers){
+    const others=todayRecs.filter(x=>timeToMin(x.end)>nowMin);
+    const html=others.map(o=>'<div class="conflict-item">'+o.dept+' '+o.user+'\uff1a'+o.start+' - '+o.end+'</div>').join('');
+    showModal('\u26a0 \u4e0d\u53ef\u5173\u673a','\u8be5\u8bbe\u5907\u4ecd\u6709\u4ee5\u4e0b\u540e\u7eed\u4f7f\u7528\u8bb0\u5f55\uff0c<strong>\u4e25\u7981\u5173\u673a</strong>\uff1a<div class="conflict-list">'+html+'</div>','\u6211\u77e5\u9053\u4e86',closeModal,false);
+    return;
+  }
+  showModal('\u5173\u673a\u786e\u8ba4','\u786e\u8ba4<strong>'+r.device+'</strong>\u5f53\u524d\u65e0\u5176\u4ed6\u90e8\u95e8\u4f7f\u7528\uff0c\u53ef\u4ee5\u6267\u884c\u5173\u673a\uff1f<br><br>\u5173\u673a\u540e\u8bf7\u5728\u8bbe\u5907\u65c1\u72b6\u6001\u770b\u677f\u66f4\u65b0\u4e3a"\u7a7a\u95f2"\u3002','\u786e\u8ba4\u5173\u673a',()=>{
+    r.actualEnd=formatTime(new Date());r.status='done';saveData();
+    renderRecords();renderHome();
+    showModal('\u5df2\u786e\u8ba4','\u5173\u673a\u786e\u8ba4\u5df2\u8bb0\u5f55\u3002\u611f\u8c22\u60a8\u9075\u5b88\u5171\u7528\u7ba1\u7406\u89c4\u8303\uff01','\u786e\u5b9a',closeModal,false);
+  },true);
+}
+function showModal(title,body,confirmText,onConfirm,showCancel){
+  document.getElementById('modalTitle').innerHTML=title;
+  document.getElementById('modalBody').innerHTML=body;
+  const actions=document.getElementById('modalActions');
+  if(showCancel){
+    actions.innerHTML='<button class="modal-cancel" onclick="closeModal()">\u53d6\u6d88</button><button class="modal-confirm" id="modalConfirm">'+confirmText+'</button>';
+    document.getElementById('modalConfirm').onclick=()=>{closeModal();if(onConfirm)onConfirm();};
+  }else{
+    actions.innerHTML='<button class="modal-confirm" id="modalConfirm" style="width:100%">'+confirmText+'</button>';
+    document.getElementById('modalConfirm').onclick=()=>{closeModal();if(onConfirm)onConfirm();};
+  }
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal(){document.getElementById('modalOverlay').classList.remove('show');}
+function showDeviceDetail(device){
+  const{active,future}=getDeviceStatus(device);
+  let body='';
+  if(active) body+='<strong>\u5f53\u524d\u4f7f\u7528\u4e2d</strong><br>'+active.dept+' '+active.user+' \u00b7 '+active.start+'-'+active.end+'<br>'+(active.note||'')+'<br><br>';
+  else body+='<strong>\u5f53\u524d\u7a7a\u95f2</strong><br><br>';
+  if(future.length>0){
+    body+='<strong>\u540e\u7eed\u767b\u8bb0\uff1a</strong><br>';
+    future.forEach(r=>{body+='&bull; '+r.start+'-'+r.end+' '+r.dept+' '+r.user+'<br>';});
+  }else{
+    body+='\u65e0\u540e\u7eed\u767b\u8bb0\uff0c\u82e5\u5f53\u524d\u7a7a\u95f2\u5219\u53ef\u968f\u65f6\u4f7f\u7528\u3002';
+  }
+  showModal(device+' \u8be6\u60c5',body,'\u53bb\u767b\u8bb0',()=>{document.getElementById('regDevice').value=device;goPage('register');},true);
+}
+function updateClock(){
+  const n=new Date();
+  document.getElementById('clock').textContent=pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
+}
+setInterval(updateClock,1000);
+updateClock();
+
+loadData();
+renderHome();
+
+setInterval(()=>{
+  if(document.getElementById('page-home').classList.contains('active')) renderHome();
+  if(document.getElementById('page-records').classList.contains('active')) renderRecords();
+},60000);
+</script>
+</body>
+</html>
