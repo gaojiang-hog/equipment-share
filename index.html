@@ -1,226 +1,159 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>公辅设备共享管理</title>
+<script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.2/dist/av-live-query-min.js"></script>
 <style>
-  :root {
-    --primary: #1a1a1a;
-    --secondary: #666;
-    --muted: #999;
-    --light: #f5f5f5;
-    --border: #e8e8e8;
-    --green: #2e7d32;
-    --green-bg: rgba(46,125,50,0.08);
-    --orange: #e65100;
-    --orange-bg: rgba(230,81,0,0.08);
-    --red: #c62828;
-    --red-bg: rgba(198,40,40,0.08);
-    --blue: #1565c0;
-    --blue-bg: rgba(21,101,192,0.08);
-    --radius: 10px;
-    --shadow: 0 1px 3px rgba(0,0,0,0.06);
-  }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
-    background: #fafafa;
-    color: var(--primary);
-    max-width: 430px;
-    margin: 0 auto;
-    min-height: 100vh;
-    padding-bottom: 80px;
-  }
-  .header {
-    background: #fff;
-    padding: 16px 20px 12px;
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .header-top { display: flex; justify-content: space-between; align-items: center; }
-  .header-title { font-size: 18px; font-weight: 600; }
-  .header-time { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .header-sub { font-size: 12px; color: var(--secondary); margin-top: 4px; }
-  .page { display: none; padding: 16px 16px 24px; }
-  .page.active { display: block; }
-  .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
-  .device-card {
-    background: #fff; border-radius: var(--radius); padding: 16px;
-    box-shadow: var(--shadow); border: 1px solid var(--border);
-    cursor: pointer; transition: transform 0.15s;
-  }
-  .device-card:active { transform: scale(0.98); }
-  .device-card.busy { border-left: 3px solid var(--orange); }
-  .device-card.idle { border-left: 3px solid var(--green); }
-  .device-name { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
-  .device-info { font-size: 12px; color: var(--secondary); line-height: 1.6; }
-  .device-status {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 12px; font-weight: 500; padding: 3px 10px;
-    border-radius: 6px; margin-top: 10px;
-  }
-  .status-dot { width: 6px; height: 6px; border-radius: 50%; }
-  .status-idle { background: var(--green-bg); color: var(--green); }
-  .status-idle .status-dot { background: var(--green); }
-  .status-busy { background: var(--orange-bg); color: var(--orange); }
-  .status-busy .status-dot { background: var(--orange); }
-  .section-title {
-    font-size: 14px; font-weight: 600; color: var(--secondary);
-    margin: 20px 0 10px; display: flex; align-items: center; gap: 6px;
-  }
-  .section-title::before {
-    content: ''; display: inline-block; width: 3px; height: 14px;
-    background: var(--primary); border-radius: 2px;
-  }
-  .timeline {
-    background: #fff; border-radius: var(--radius);
-    box-shadow: var(--shadow); border: 1px solid var(--border); overflow: hidden;
-  }
-  .timeline-row {
-    display: flex; align-items: center; padding: 10px 14px;
-    border-bottom: 1px solid var(--border); font-size: 13px;
-  }
-  .timeline-row:last-child { border-bottom: none; }
-  .timeline-time { width: 80px; font-weight: 500; color: var(--secondary); flex-shrink: 0; }
-  .timeline-content { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-  .timeline-chip { font-size: 11px; padding: 2px 8px; border-radius: 4px; display: inline-block; width: fit-content; }
-  .chip-chiller { background: var(--blue-bg); color: var(--blue); }
-  .chip-compressor { background: var(--orange-bg); color: var(--orange); }
-  .chip-empty { background: var(--light); color: var(--muted); }
-  .fab {
-    position: fixed; bottom: 90px; right: 20px; width: 52px; height: 52px;
-    border-radius: 50%; background: var(--primary); color: #fff; border: none;
-    font-size: 24px; display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2); cursor: pointer; z-index: 200;
-  }
-  .fab:active { transform: scale(0.92); }
-  .form-card {
-    background: #fff; border-radius: var(--radius); padding: 20px;
-    box-shadow: var(--shadow); border: 1px solid var(--border);
-  }
-  .form-group { margin-bottom: 16px; }
-  .form-label { display: block; font-size: 13px; color: var(--secondary); margin-bottom: 6px; font-weight: 500; }
-  .form-input, .form-select {
-    width: 100%; padding: 11px 14px; border: 1px solid var(--border);
-    border-radius: 8px; font-size: 15px; background: #fff; color: var(--primary);
-    -webkit-appearance: none; appearance: none;
-  }
-  .form-input:focus, .form-select:focus { outline: none; border-color: var(--primary); }
-  .time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .btn-primary {
-    width: 100%; padding: 13px; border: none; border-radius: 8px;
-    background: var(--primary); color: #fff; font-size: 15px;
-    font-weight: 600; cursor: pointer; margin-top: 4px;
-  }
-  .btn-primary:active { opacity: 0.9; }
-  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-  .alert {
-    padding: 12px 14px; border-radius: 8px; font-size: 13px;
-    margin-bottom: 16px; display: none; line-height: 1.5;
-  }
-  .alert.show { display: block; }
-  .alert-ok { background: var(--green-bg); color: var(--green); border: 1px solid rgba(46,125,50,0.2); }
-  .alert-warn { background: var(--red-bg); color: var(--red); border: 1px solid rgba(198,40,40,0.2); }
-  .hint { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.6; padding: 10px; background: var(--light); border-radius: 6px; }
-  .record-list { margin-top: 8px; }
-  .record-item {
-    background: #fff; border-radius: var(--radius); padding: 14px 16px;
-    margin-bottom: 10px; box-shadow: var(--shadow); border: 1px solid var(--border);
-    display: flex; justify-content: space-between; align-items: flex-start;
-  }
-  .record-left { flex: 1; }
-  .record-dept { font-size: 14px; font-weight: 600; }
-  .record-time { font-size: 12px; color: var(--secondary); margin-top: 3px; }
-  .record-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
-  .record-right { text-align: right; }
-  .record-device { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--light); color: var(--secondary); }
-  .record-status { font-size: 11px; padding: 2px 8px; border-radius: 4px; margin-top: 6px; display: inline-block; }
-  .tag-active { background: var(--orange-bg); color: var(--orange); }
-  .tag-done { background: var(--green-bg); color: var(--green); }
-  .tag-future { background: var(--blue-bg); color: var(--blue); }
-  .tag-conflict { background: var(--red-bg); color: var(--red); }
-  .record-actions { display: flex; gap: 8px; margin-top: 10px; }
-  .record-actions button { font-size: 12px; padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border); background: #fff; cursor: pointer; color: var(--secondary); }
-  .record-actions .btn-end { background: var(--primary); color: #fff; border-color: var(--primary); }
-  .record-actions .btn-shutdown { background: var(--red-bg); color: var(--red); border-color: rgba(198,40,40,0.3); }
-  .empty { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; }
-  .tabbar {
-    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-    width: 100%; max-width: 430px; background: #fff;
-    border-top: 1px solid var(--border); display: flex;
-    justify-content: space-around; padding: 6px 0 10px; z-index: 200;
-  }
-  .tabbar-item { flex: 1; text-align: center; cursor: pointer; padding: 4px 0; color: var(--muted); font-size: 11px; transition: color 0.2s; }
-  .tabbar-item.active { color: var(--primary); font-weight: 600; }
-  .tabbar-icon { width: 24px; height: 24px; margin: 0 auto 2px; display: flex; align-items: center; justify-content: center; }
-  .modal-overlay {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.45); display: none;
-    align-items: center; justify-content: center; z-index: 300; padding: 20px;
-  }
-  .modal-overlay.show { display: flex; }
-  .modal {
-    background: #fff; border-radius: 14px; width: 100%;
-    max-width: 340px; padding: 24px; animation: modalIn 0.2s ease-out;
-  }
-  @keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-  .modal-title { font-size: 17px; font-weight: 600; margin-bottom: 12px; }
-  .modal-body { font-size: 14px; color: var(--secondary); line-height: 1.6; margin-bottom: 20px; }
-  .modal-actions { display: flex; gap: 10px; }
-  .modal-actions button { flex: 1; padding: 11px; border-radius: 8px; font-size: 14px; cursor: pointer; border: none; }
-  .modal-cancel { background: var(--light); color: var(--primary); }
-  .modal-confirm { background: var(--primary); color: #fff; }
-  .rule-card {
-    background: #fff; border-radius: var(--radius); padding: 16px;
-    margin-bottom: 12px; box-shadow: var(--shadow); border: 1px solid var(--border);
-  }
-  .rule-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
-  .rule-text { font-size: 13px; color: var(--secondary); line-height: 1.8; }
-  .conflict-list { margin: 10px 0; }
-  .conflict-item { background: var(--red-bg); border: 1px solid rgba(198,40,40,0.15); border-radius: 6px; padding: 8px 12px; margin-bottom: 6px; font-size: 13px; }
+:root{--primary:#1a1a1a;--secondary:#666;--muted:#999;--light:#f5f5f5;--border:#e8e8e8;--green:#2e7d32;--green-bg:rgba(46,125,50,0.08);--orange:#e65100;--orange-bg:rgba(230,81,0,0.08);--red:#c62828;--red-bg:rgba(198,40,40,0.08);--blue:#1565c0;--blue-bg:rgba(21,101,192,0.08);--radius:10px;--shadow:0 1px 3px rgba(0,0,0,0.06)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;background:#fafafa;color:var(--primary);max-width:430px;margin:0 auto;min-height:100vh;padding-bottom:80px}
+.header{background:#fff;padding:16px 20px 12px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.header-top{display:flex;justify-content:space-between;align-items:center}
+.header-title{font-size:18px;font-weight:600}
+.header-time{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.header-sub{font-size:12px;color:var(--secondary);margin-top:4px}
+.sync-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:4px;margin-left:8px}
+.sync-ok{background:var(--green-bg);color:var(--green)}
+.sync-off{background:var(--light);color:var(--muted)}
+.sync-dot{width:5px;height:5px;border-radius:50%}
+.sync-ok .sync-dot{background:var(--green)}
+.sync-off .sync-dot{background:var(--muted)}
+.page{display:none;padding:16px 16px 24px}
+.page.active{display:block}
+.device-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.device-card{background:#fff;border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);border:1px solid var(--border);cursor:pointer;transition:transform .15s}
+.device-card:active{transform:scale(.98)}
+.device-card.busy{border-left:3px solid var(--orange)}
+.device-card.idle{border-left:3px solid var(--green)}
+.device-name{font-size:15px;font-weight:600;margin-bottom:6px}
+.device-info{font-size:12px;color:var(--secondary);line-height:1.6}
+.device-status{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:500;padding:3px 10px;border-radius:6px;margin-top:10px}
+.status-dot{width:6px;height:6px;border-radius:50%}
+.status-idle{background:var(--green-bg);color:var(--green)}
+.status-idle .status-dot{background:var(--green)}
+.status-busy{background:var(--orange-bg);color:var(--orange)}
+.status-busy .status-dot{background:var(--orange)}
+.section-title{font-size:14px;font-weight:600;color:var(--secondary);margin:20px 0 10px;display:flex;align-items:center;gap:6px}
+.section-title::before{content:'';display:inline-block;width:3px;height:14px;background:var(--primary);border-radius:2px}
+.timeline{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden}
+.timeline-row{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px}
+.timeline-row:last-child{border-bottom:none}
+.timeline-time{width:80px;font-weight:500;color:var(--secondary);flex-shrink:0}
+.timeline-content{flex:1;display:flex;flex-direction:column;gap:4px}
+.timeline-chip{font-size:11px;padding:2px 8px;border-radius:4px;display:inline-block;width:fit-content}
+.chip-empty{background:var(--light);color:var(--muted)}
+.fab{position:fixed;bottom:90px;right:20px;width:52px;height:52px;border-radius:50%;background:var(--primary);color:#fff;border:none;font-size:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.2);cursor:pointer;z-index:200}
+.fab:active{transform:scale(.92)}
+.form-card{background:#fff;border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);border:1px solid var(--border)}
+.form-group{margin-bottom:16px}
+.form-label{display:block;font-size:13px;color:var(--secondary);margin-bottom:6px;font-weight:500}
+.form-input,.form-select{width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:#fff;color:var(--primary);-webkit-appearance:none;appearance:none}
+.form-input:focus,.form-select:focus{outline:none;border-color:var(--primary)}
+.time-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn-primary{width:100%;padding:13px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-size:15px;font-weight:600;cursor:pointer;margin-top:4px}
+.btn-primary:active{opacity:.9}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-secondary{width:100%;padding:12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--primary);font-size:15px;font-weight:500;cursor:pointer;margin-top:10px}
+.btn-danger{width:100%;padding:12px;border:1px solid rgba(198,40,40,0.3);border-radius:8px;background:var(--red-bg);color:var(--red);font-size:15px;font-weight:500;cursor:pointer;margin-top:10px}
+.alert{padding:12px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;display:none;line-height:1.5}
+.alert.show{display:block}
+.alert-ok{background:var(--green-bg);color:var(--green);border:1px solid rgba(46,125,50,0.2)}
+.alert-warn{background:var(--red-bg);color:var(--red);border:1px solid rgba(198,40,40,0.2)}
+.alert-info{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(21,101,192,0.2)}
+.hint{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6;padding:10px;background:var(--light);border-radius:6px}
+.record-list{margin-top:8px}
+.record-item{background:#fff;border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);border:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start}
+.record-left{flex:1}
+.record-dept{font-size:14px;font-weight:600}
+.record-time{font-size:12px;color:var(--secondary);margin-top:3px}
+.record-note{font-size:11px;color:var(--muted);margin-top:4px}
+.record-right{text-align:right}
+.record-device{font-size:11px;padding:2px 8px;border-radius:4px;background:var(--light);color:var(--secondary)}
+.record-status{font-size:11px;padding:2px 8px;border-radius:4px;margin-top:6px;display:inline-block}
+.tag-active{background:var(--orange-bg);color:var(--orange)}
+.tag-done{background:var(--green-bg);color:var(--green)}
+.tag-future{background:var(--blue-bg);color:var(--blue)}
+.tag-conflict{background:var(--red-bg);color:var(--red)}
+.record-actions{display:flex;gap:8px;margin-top:10px}
+.record-actions button{font-size:12px;padding:4px 12px;border-radius:4px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--secondary)}
+.record-actions .btn-end{background:var(--primary);color:#fff;border-color:var(--primary)}
+.record-actions .btn-shutdown{background:var(--red-bg);color:var(--red);border-color:rgba(198,40,40,0.3)}
+.empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px}
+.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#fff;border-top:1px solid var(--border);display:flex;justify-content:space-around;padding:6px 0 10px;z-index:200}
+.tabbar-item{flex:1;text-align:center;cursor:pointer;padding:4px 0;color:var(--muted);font-size:11px;transition:color .2s}
+.tabbar-item.active{color:var(--primary);font-weight:600}
+.tabbar-icon{width:24px;height:24px;margin:0 auto 2px;display:flex;align-items:center;justify-content:center}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:300;padding:20px}
+.modal-overlay.show{display:flex}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:340px;padding:24px;animation:modalIn .2s ease-out}
+@keyframes modalIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.modal-title{font-size:17px;font-weight:600;margin-bottom:12px}
+.modal-body{font-size:14px;color:var(--secondary);line-height:1.6;margin-bottom:20px}
+.modal-actions{display:flex;gap:10px}
+.modal-actions button{flex:1;padding:11px;border-radius:8px;font-size:14px;cursor:pointer;border:none}
+.modal-cancel{background:var(--light);color:var(--primary)}
+.modal-confirm{background:var(--primary);color:#fff}
+.modal-confirm.danger{background:var(--red)}
+.rule-card{background:#fff;border-radius:var(--radius);padding:16px;margin-bottom:12px;box-shadow:var(--shadow);border:1px solid var(--border)}
+.rule-title{font-size:14px;font-weight:600;margin-bottom:8px}
+.rule-text{font-size:13px;color:var(--secondary);line-height:1.8}
+.rule-text strong{color:var(--primary)}
+.conflict-list{margin:10px 0}
+.conflict-item{background:var(--red-bg);border:1px solid rgba(198,40,40,0.15);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:13px}
+.config-box{background:#fff;border-radius:var(--radius);padding:16px;margin-bottom:16px;box-shadow:var(--shadow);border:1px solid var(--border)}
+.config-title{font-size:14px;font-weight:600;margin-bottom:10px}
+.config-input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:8px;background:#fff}
+.config-hint{font-size:11px;color:var(--muted);line-height:1.5}
+
+/* 设备管理页面样式 */
+.device-list{margin-top:8px}
+.device-list-item{background:#fff;border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.device-list-left{flex:1}
+.device-list-name{font-size:15px;font-weight:600}
+.device-list-meta{font-size:12px;color:var(--secondary);margin-top:2px}
+.device-list-actions{display:flex;gap:8px}
+.device-list-actions button{font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--secondary)}
+.device-list-actions .btn-del{background:var(--red-bg);color:var(--red);border-color:rgba(198,40,40,0.3)}
+.device-color-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
+.color-picker-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.color-option{width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:transform .15s}
+.color-option.selected{border-color:var(--primary);transform:scale(1.1)}
 </style>
+<base target="_blank">
 </head>
 <body>
 
 <div class="header">
   <div class="header-top">
-    <div class="header-title" id="pageTitle">设备状态</div>
+    <div style="display:flex;align-items:center;">
+      <div class="header-title" id="pageTitle">设备状态</div>
+      <span class="sync-badge sync-off" id="syncBadge"><span class="sync-dot"></span>本地模式</span>
+    </div>
     <div class="header-time" id="clock">--:--:--</div>
   </div>
-  <div class="header-sub" id="pageSub">实时查看冷水机与空压机使用状态</div>
+  <div class="header-sub" id="pageSub">实时查看公辅设备使用状态</div>
 </div>
 
+<!-- 首页 -->
 <div class="page active" id="page-home">
-  <div class="device-grid">
-    <div class="device-card idle" id="card-chiller" onclick="showDeviceDetail('\u51b7\u6c34\u673a')">
-      <div class="device-name">冷水机</div>
-      <div class="device-info" id="info-chiller">当前空闲<br>无待办登记</div>
-      <div class="device-status status-idle" id="badge-chiller"><span class="status-dot"></span>空闲</div>
-    </div>
-    <div class="device-card idle" id="card-compressor" onclick="showDeviceDetail('\u7a7a\u538b\u673a')">
-      <div class="device-name">空压机</div>
-      <div class="device-info" id="info-compressor">当前空闲<br>无待办登记</div>
-      <div class="device-status status-idle" id="badge-compressor"><span class="status-dot"></span>空闲</div>
-    </div>
+  <div class="device-grid" id="homeDeviceGrid">
+    <div class="empty">加载中...</div>
   </div>
   <div class="section-title">今日时段总览</div>
-  <div class="timeline" id="timeline"></div>
+  <div class="timeline" id="timeline"><div class="empty">加载中...</div></div>
   <div class="section-title">最近登记</div>
-  <div class="record-list" id="recentRecords"></div>
+  <div class="record-list" id="recentRecords"><div class="empty">加载中...</div></div>
 </div>
 
+<!-- 登记页 -->
 <div class="page" id="page-register">
   <div class="alert" id="regAlert"></div>
   <div class="form-card">
     <div class="form-group">
       <label class="form-label">使用部门</label>
-      <select class="form-select" id="regDept">
-        <option value="生产测试">生产测试</option>
-        <option value="研发测试">研发测试</option>
-      </select>
+      <select class="form-select" id="regDept"><option value="生产测试">生产测试</option><option value="研发测试">研发测试</option></select>
     </div>
     <div class="form-group">
       <label class="form-label">使用人</label>
@@ -228,10 +161,7 @@
     </div>
     <div class="form-group">
       <label class="form-label">选择设备</label>
-      <select class="form-select" id="regDevice">
-        <option value="冷水机">冷水机</option>
-        <option value="空压机">空压机</option>
-      </select>
+      <select class="form-select" id="regDevice"></select>
     </div>
     <div class="form-group">
       <label class="form-label">使用时段</label>
@@ -245,54 +175,80 @@
       <input type="text" class="form-input" id="regNote" placeholder="例如：温度循环试验需持续运行">
     </div>
     <button class="btn-primary" onclick="submitRegister()">提交登记</button>
-    <div class="hint">
-      <strong>使用规则：</strong><br>
-      ① 使用前必须登记时段<br>
-      ② 时段冲突时系统会提醒协调<br>
-      ③ 最后离开人员确认无后续使用后方可关机
-    </div>
+    <div class="hint"><strong>使用规则：</strong><br>① 使用前必须登记时段<br>② 时段冲突时系统会提醒协调<br>③ 最后离开人员确认无后续使用后方可关机</div>
   </div>
 </div>
 
+<!-- 记录页 -->
 <div class="page" id="page-records">
-  <div class="record-list" id="allRecords"></div>
+  <div class="record-list" id="allRecords"><div class="empty">加载中...</div></div>
 </div>
 
+<!-- 设备管理页 -->
+<div class="page" id="page-devices">
+  <div class="alert" id="devAlert"></div>
+  <div class="form-card" style="margin-bottom:16px;">
+    <div class="form-group">
+      <label class="form-label">设备名称</label>
+      <input type="text" class="form-input" id="devName" placeholder="例如：真空泵、氮气柜">
+    </div>
+    <div class="form-group">
+      <label class="form-label">标识颜色</label>
+      <div class="color-picker-row" id="colorPicker">
+        <div class="color-option selected" style="background:#1565c0" data-color="#1565c0" onclick="selectColor(this)"></div>
+        <div class="color-option" style="background:#2e7d32" data-color="#2e7d32" onclick="selectColor(this)"></div>
+        <div class="color-option" style="background:#e65100" data-color="#e65100" onclick="selectColor(this)"></div>
+        <div class="color-option" style="background:#6a1b9a" data-color="#6a1b9a" onclick="selectColor(this)"></div>
+        <div class="color-option" style="background:#c62828" data-color="#c62828" onclick="selectColor(this)"></div>
+        <div class="color-option" style="background:#00695c" data-color="#00695c" onclick="selectColor(this)"></div>
+        <div class="color-option" style="background:#455a64" data-color="#455a64" onclick="selectColor(this)"></div>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="addDevice()">添加设备</button>
+  </div>
+  <div class="section-title">现有设备</div>
+  <div class="device-list" id="deviceList"><div class="empty">加载中...</div></div>
+  <div class="hint" style="margin-top:12px;">设备删除后，历史记录中仍会保留该设备名称，但新登记时不再显示。默认设备（冷水机、空压机）不可删除。</div>
+</div>
+
+<!-- 规则页 -->
 <div class="page" id="page-rules">
   <div class="rule-card">
     <div class="rule-title">一、登记流程</div>
-    <div class="rule-text">
-      1. 使用设备前，打开本页面登记使用时段<br>
-      2. 填写部门、姓名、设备、计划起止时间<br>
-      3. 系统自动检测时段冲突，如有重叠会标红提醒<br>
-      4. 测试完成后，务必点击"结束使用"填写实际结束时间
-    </div>
+    <div class="rule-text">1. 使用设备前，打开本页面登记使用时段<br>2. 填写部门、姓名、设备、计划起止时间<br>3. 系统自动检测时段冲突，如有重叠会标红提醒<br>4. 测试完成后，务必点击"结束使用"填写实际结束时间</div>
   </div>
   <div class="rule-card">
     <div class="rule-title">二、关机规则（核心！）</div>
-    <div class="rule-text">
-      <strong>谁最后，谁关机。</strong>严禁提前关机影响他人。<br><br>
-      工作结束前，先查看设备状态看板：<br>
-      • 若显示"可以关机" → 执行关机<br>
-      • 若显示"请勿关机"或存在后续登记 → 必须等待所有时段结束后方可关机<br>
-      • 最后离开人员负责关机，并在记录中确认
-    </div>
+    <div class="rule-text"><strong>谁最后，谁关机。</strong>严禁提前关机影响他人。<br><br>工作结束前，先查看设备状态看板：<br>• 若显示"可以关机" → 执行关机<br>• 若显示"请勿关机"或存在后续登记 → 必须等待所有时段结束后方可关机<br>• 最后离开人员负责关机，并在记录中确认</div>
   </div>
   <div class="rule-card">
     <div class="rule-title">三、冲突处理</div>
-    <div class="rule-text">
-      1. 发现时段冲突时，双方主动协商<br>
-      2. 优先保障已开机方完成当前测试循环<br>
-      3. 协商无果时，由测试主管/班组长根据项目紧急度仲裁
-    </div>
+    <div class="rule-text">1. 发现时段冲突时，双方主动协商<br>2. 优先保障已开机方完成当前测试循环<br>3. 协商无果时，由测试主管/班组长根据项目紧急度仲裁</div>
   </div>
   <div class="rule-card">
-    <div class="rule-title">四、状态颜色说明</div>
-    <div class="rule-text">
-      <span style="color:var(--green)">●</span> 绿色 = 空闲 / 无冲突 / 已完成<br>
-      <span style="color:var(--orange)">●</span> 橙色 = 进行中 / 使用中<br>
-      <span style="color:var(--red)">●</span> 红色 = 时段冲突 / 请勿关机<br>
-      <span style="color:var(--blue)">●</span> 蓝色 = 待开始
+    <div class="rule-title">四、数据同步说明</div>
+    <div class="rule-text"><strong>本地模式</strong>：数据保存在本机浏览器，换设备/清缓存会丢失，多人数据不互通。<br><br><strong>云端模式</strong>：配置 LeanCloud 后，所有人数据实时同步，支持多人同时查看和登记。<br>建议班组长统一配置后，将链接分发给所有人使用。</div>
+  </div>
+</div>
+
+<!-- 配置页 -->
+<div class="page" id="page-config">
+  <div class="config-box">
+    <div class="config-title">配置云端同步（可选）</div>
+    <div class="config-hint" style="margin-bottom:12px;">
+      当前为<strong>本地模式</strong>，数据仅保存在本机浏览器中，多人无法共享。<br><br>
+      如需多人实时同步，请配置 LeanCloud（免费，5分钟搞定）：
+    </div>
+    <label style="font-size:12px;color:var(--secondary);">App ID</label>
+    <input type="text" class="config-input" id="cfgAppId" placeholder="如：xxxxxxxxxxxxxxxxxxxxxxxx">
+    <label style="font-size:12px;color:var(--secondary);">App Key</label>
+    <input type="text" class="config-input" id="cfgAppKey" placeholder="如：xxxxxxxxxxxxxxxxxxxxxxxx">
+    <label style="font-size:12px;color:var(--secondary);">Server URL</label>
+    <input type="text" class="config-input" id="cfgServerUrl" placeholder="如：https://xxxxx.lc-cn-n1-shared.com">
+    <button class="btn-primary" onclick="saveConfig()">保存并连接</button>
+    <button class="btn-secondary" onclick="skipConfig()">暂不使用同步，继续本地模式</button>
+    <div class="config-hint">
+      没有账号？<a href="https://www.leancloud.cn/" target="_blank" style="color:var(--blue);">点击注册 LeanCloud</a> → 创建应用 → 复制 AppID / AppKey / 服务器地址
     </div>
   </div>
 </div>
@@ -301,22 +257,16 @@
 
 <div class="tabbar">
   <div class="tabbar-item active" onclick="goPage('home')">
-    <div class="tabbar-icon">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-    </div>
-    状态
+    <div class="tabbar-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>状态
   </div>
   <div class="tabbar-item" onclick="goPage('records')">
-    <div class="tabbar-icon">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-    </div>
-    记录
+    <div class="tabbar-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>记录
+  </div>
+  <div class="tabbar-item" onclick="goPage('devices')">
+    <div class="tabbar-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>设备
   </div>
   <div class="tabbar-item" onclick="goPage('rules')">
-    <div class="tabbar-icon">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-    </div>
-    说明
+    <div class="tabbar-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div>说明
   </div>
 </div>
 
@@ -332,123 +282,301 @@
 </div>
 
 <script>
-const STORAGE_KEY='eqm_records_v3';
-let records=[];
-function loadData(){
+const LC_CONFIG={appId:'',appKey:'',serverURL:''};
+let records=[],devices=[],lcReady=false,lcClass=null,lcDeviceClass=null;
+const DEFAULT_DEVICES=[
+  {id:'dev_chiller',name:'冷水机',color:'#1565c0',builtin:true},
+  {id:'dev_compressor',name:'空压机',color:'#e65100',builtin:true}
+];
+const COLOR_MAP={
+  '#1565c0':'chip-blue','#2e7d32':'chip-green','#e65100':'chip-orange',
+  '#6a1b9a':'chip-purple','#c62828':'chip-red','#00695c':'chip-teal','#455a64':'chip-grey'
+};
+
+function initData(){
+  loadDevices();
+  const saved=localStorage.getItem('eqm_lc_cfg');
+  if(saved){
+    try{Object.assign(LC_CONFIG,JSON.parse(saved))}catch(e){}
+  }
+  if(LC_CONFIG.appId&&LC_CONFIG.appKey&&LC_CONFIG.serverURL){
+    try{
+      AV.init(LC_CONFIG);
+      lcClass=AV.Object.extend('EquipmentRecord');
+      lcDeviceClass=AV.Object.extend('EquipmentDevice');
+      lcReady=true;
+      updateSyncBadge(true);
+      startLiveQuery();
+    }catch(e){console.error('LeanCloud init failed',e);loadLocalData()}
+  }else{
+    loadLocalData();
+    if(!saved){goPage('config');return}
+  }
+  renderHome();
+}
+
+/* ========== 设备管理 ========== */
+function loadDevices(){
   try{
-    const raw=localStorage.getItem(STORAGE_KEY);
-    if(raw) records=JSON.parse(raw);
+    const raw=localStorage.getItem('eqm_devices_v1');
+    if(raw){devices=JSON.parse(raw)}
   }catch(e){}
-  if(records.length===0){
-    const today=formatDate(new Date());
-    records=[
-      {id:1,date:today,dept:'\u751f\u4ea7\u6d4b\u8bd5',user:'\u5f20\u4e09',device:'\u51b7\u6c34\u673a',start:'08:00',end:'12:00',actualEnd:'11:55',note:'\u4f8b\u884c\u6e29\u5faa\u8bd5\u9a8c',status:'done'},
-      {id:2,date:today,dept:'\u7814\u53d1\u6d4b\u8bd5',user:'\u674e\u56db',device:'\u7a7a\u538b\u673a',start:'09:00',end:'11:30',actualEnd:'',note:'\u6c14\u5bc6\u6027\u6d4b\u8bd5',status:'active'},
-      {id:3,date:today,dept:'\u7814\u53d1\u6d4b\u8bd5',user:'\u738b\u4e94',device:'\u51b7\u6c34\u673a',start:'14:00',end:'17:00',actualEnd:'',note:'\u65b0\u4ea7\u54c1\u9a8c\u8bc1',status:'future'},
-      {id:4,date:today,dept:'\u751f\u4ea7\u6d4b\u8bd5',user:'\u8d75\u516d',device:'\u7a7a\u538b\u673a',start:'11:00',end:'15:00',actualEnd:'',note:'\u4ea7\u7ebf\u8054\u8c03',status:'future'},
-      {id:5,date:today,dept:'\u7814\u53d1\u6d4b\u8bd5',user:'\u5b59\u4e03',device:'\u7a7a\u538b\u673a',start:'11:30',end:'13:00',actualEnd:'',note:'\u4e34\u65f6\u52a0\u6025\u6d4b\u8bd5',status:'future'}
-    ];
-    saveData();
+  if(devices.length===0){devices=JSON.parse(JSON.stringify(DEFAULT_DEVICES));saveDevices()}
+}
+function saveDevices(){
+  localStorage.setItem('eqm_devices_v1',JSON.stringify(devices));
+  if(lcReady&&lcDeviceClass){
+    // 云端同步设备列表（简化：每次全量覆盖）
+    syncDevicesToCloud().catch(e=>console.error('device sync failed',e));
   }
 }
-function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify(records));}
-function pad(n){return String(n).padStart(2,'0');}
-function formatDate(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
-function formatTime(d){return pad(d.getHours())+':'+pad(d.getMinutes());}
-function timeToMin(t){const p=t.split(':');return parseInt(p[0])*60+parseInt(p[1]);}
-function overlaps(aS,aE,bS,bE){return timeToMin(aS)<timeToMin(bE)&&timeToMin(aE)>timeToMin(bS);}
-function getTodayRecords(){return records.filter(r=>r.date===formatDate(new Date()));}
-function getDeviceStatus(device){
-  const now=new Date();
-  const curMin=now.getHours()*60+now.getMinutes();
-  const todayRecs=getTodayRecords().filter(r=>r.device===device);
-  const active=todayRecs.find(r=>{
-    const s=timeToMin(r.start),e=timeToMin(r.end);
-    return s<=curMin&&(r.actualEnd?timeToMin(r.actualEnd)>curMin:e>curMin);
-  });
-  const future=todayRecs.filter(r=>timeToMin(r.start)>curMin&&!r.actualEnd);
-  return{active,future};
+async function syncDevicesToCloud(){
+  if(!lcReady)return;
+  try{
+    const query=new AV.Query('EquipmentDevice');
+    const existing=await query.find();
+    await AV.Object.destroyAll(existing);
+    const objs=devices.map(d=>{const o=new lcDeviceClass();o.set('deviceId',d.id);o.set('name',d.name);o.set('color',d.color);o.set('builtin',!!d.builtin);return o;});
+    await AV.Object.saveAll(objs);
+  }catch(e){console.error(e)}
 }
+async function fetchCloudDevices(){
+  if(!lcReady)return;
+  try{
+    const query=new AV.Query('EquipmentDevice');
+    query.limit(100);
+    const results=await query.find();
+    if(results.length>0){
+      devices=results.map(r=>({id:r.get('deviceId'),name:r.get('name'),color:r.get('color'),builtin:!!r.get('builtin')}));
+      localStorage.setItem('eqm_devices_v1',JSON.stringify(devices));
+    }
+  }catch(e){console.error('fetch devices failed',e)}
+}
+
+function selectColor(el){
+  document.querySelectorAll('.color-option').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+function getSelectedColor(){
+  const sel=document.querySelector('.color-option.selected');
+  return sel?sel.dataset.color:'#1565c0';
+}
+function addDevice(){
+  const name=document.getElementById('devName').value.trim();
+  if(!name){showAlert('devAlert','请输入设备名称','warn');return}
+  if(devices.some(d=>d.name===name)){showAlert('devAlert','该设备名称已存在','warn');return}
+  const id='dev_'+Date.now().toString(36);
+  const color=getSelectedColor();
+  devices.push({id,name,color,builtin:false});
+  saveDevices();
+  document.getElementById('devName').value='';
+  renderDeviceList();
+  showAlert('devAlert','设备添加成功','ok');
+  if(document.getElementById('page-home').classList.contains('active'))renderHome();
+}
+function deleteDevice(id){
+  const dev=devices.find(d=>d.id===id);
+  if(!dev||dev.builtin){showAlert('devAlert','默认设备不可删除','warn');return}
+  showModal('删除确认','确定删除设备 <strong>'+dev.name+'</strong> 吗？<br><br>删除后新登记将不再显示该设备，但历史记录保留。','确认删除',()=>{
+    devices=devices.filter(d=>d.id!==id);
+    saveDevices();
+    renderDeviceList();
+    if(document.getElementById('page-home').classList.contains('active'))renderHome();
+  },true);
+}
+function renderDeviceList(){
+  const container=document.getElementById('deviceList');
+  if(devices.length===0){container.innerHTML='<div class="empty">暂无设备</div>';return}
+  container.innerHTML=devices.map(d=>{
+    const isBuiltin=d.builtin?'<span style="font-size:11px;color:var(--muted);margin-left:6px;">(默认)</span>':'';
+    const delBtn=d.builtin?'':'<button class="btn-del" onclick="deleteDevice(''+d.id+'')">删除</button>';
+    return '<div class="device-list-item"><div class="device-list-left"><div class="device-list-name"><span class="device-color-dot" style="background:'+d.color+'"></span>'+d.name+isBuiltin+'</div><div class="device-list-meta">ID: '+d.id+'</div></div><div class="device-list-actions">'+delBtn+'</div></div>';
+  }).join('');
+}
+
+/* ========== 原有数据逻辑（适配动态设备） ========== */
+function loadLocalData(){
+  try{const raw=localStorage.getItem('eqm_records_v3');if(raw)records=JSON.parse(raw)}catch(e){}
+  if(records.length===0)insertDemoData();
+}
+function insertDemoData(){
+  const today=formatDate(new Date());
+  records=[
+    {id:'1',date:today,dept:'生产测试',user:'张三',device:'冷水机',start:'08:00',end:'12:00',actualEnd:'11:55',note:'例行温循试验',status:'done'},
+    {id:'2',date:today,dept:'研发测试',user:'李四',device:'空压机',start:'09:00',end:'11:30',actualEnd:'',note:'气密性测试',status:'active'},
+    {id:'3',date:today,dept:'研发测试',user:'王五',device:'冷水机',start:'14:00',end:'17:00',actualEnd:'',note:'新产品验证',status:'future'},
+    {id:'4',date:today,dept:'生产测试',user:'赵六',device:'空压机',start:'11:00',end:'15:00',actualEnd:'',note:'产线联调',status:'future'},
+    {id:'5',date:today,dept:'研发测试',user:'孙七',device:'空压机',start:'11:30',end:'13:00',actualEnd:'',note:'临时加急测试',status:'future'}
+  ];
+  saveLocalData();
+}
+function saveLocalData(){localStorage.setItem('eqm_records_v3',JSON.stringify(records))}
+function updateSyncBadge(ok){
+  const el=document.getElementById('syncBadge');
+  if(ok){el.className='sync-badge sync-ok';el.innerHTML='<span class="sync-dot"></span>云端同步'}
+  else{el.className='sync-badge sync-off';el.innerHTML='<span class="sync-dot"></span>本地模式'}
+}
+let liveQuery=null;
+async function startLiveQuery(){
+  if(!lcReady)return;
+  try{
+    await fetchCloudDevices();
+    const query=new AV.Query('EquipmentRecord');
+    query.equalTo('date',formatDate(new Date()));
+    liveQuery=await AV.LiveQuery.init(query);
+    liveQuery.on('create',()=>fetchCloudData());
+    liveQuery.on('update',()=>fetchCloudData());
+    liveQuery.on('delete',()=>fetchCloudData());
+    fetchCloudData();
+  }catch(e){console.error('LiveQuery failed',e)}
+}
+async function fetchCloudData(){
+  if(!lcReady)return;
+  try{
+    await fetchCloudDevices();
+    const query=new AV.Query('EquipmentRecord');
+    query.equalTo('date',formatDate(new Date()));
+    query.limit(1000);
+    const results=await query.find();
+    records=results.map(r=>({
+      id:r.id,date:r.get('date'),dept:r.get('dept'),user:r.get('user'),
+      device:r.get('device'),start:r.get('start'),end:r.get('end'),
+      actualEnd:r.get('actualEnd')||'',note:r.get('note')||'',status:r.get('status')||'future'
+    }));
+    refreshActivePages();
+  }catch(e){console.error('fetch failed',e)}
+}
+function refreshActivePages(){
+  if(document.getElementById('page-home').classList.contains('active'))renderHome();
+  if(document.getElementById('page-records').classList.contains('active'))renderRecords();
+  if(document.getElementById('page-devices').classList.contains('active'))renderDeviceList();
+}
+function saveConfig(){
+  const appId=document.getElementById('cfgAppId').value.trim();
+  const appKey=document.getElementById('cfgAppKey').value.trim();
+  const serverURL=document.getElementById('cfgServerUrl').value.trim();
+  if(!appId||!appKey||!serverURL){
+    showAlert('regAlert','请填写完整的 LeanCloud 配置信息','warn');
+    return;
+  }
+  LC_CONFIG.appId=appId;LC_CONFIG.appKey=appKey;LC_CONFIG.serverURL=serverURL;
+  localStorage.setItem('eqm_lc_cfg',JSON.stringify(LC_CONFIG));
+  location.reload();
+}
+function skipConfig(){
+  localStorage.setItem('eqm_lc_cfg',JSON.stringify({skipped:true}));
+  goPage('home');
+}
+function pad(n){return String(n).padStart(2,'0')}
+function formatDate(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function formatTime(d){return pad(d.getHours())+':'+pad(d.getMinutes())}
+function timeToMin(t){const p=t.split(':');return parseInt(p[0])*60+parseInt(p[1])}
+function overlaps(aS,aE,bS,bE){return timeToMin(aS)<timeToMin(bE)&&timeToMin(aE)>timeToMin(bS)}
+function getTodayRecords(){return records.filter(r=>r.date===formatDate(new Date()))}
+function getDeviceStatus(deviceName){
+  const now=new Date(),curMin=now.getHours()*60+now.getMinutes();
+  const todayRecs=getTodayRecords().filter(r=>r.device===deviceName);
+  const active=todayRecs.find(r=>{const s=timeToMin(r.start),e=timeToMin(r.end);return s<=curMin&&(r.actualEnd?timeToMin(r.actualEnd)>curMin:e>curMin)});
+  const future=todayRecs.filter(r=>timeToMin(r.start)>curMin&&!r.actualEnd);
+  return{active,future}
+}
+
+/* ========== 页面导航 ========== */
 function goPage(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tabbar-item').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
-  const titles={home:'\u8bbe\u5907\u72b6\u6001',register:'\u4f7f\u7528\u767b\u8bb0',records:'\u4eca\u65e5\u8bb0\u5f55',rules:'\u4f7f\u7528\u8bf4\u660e'};
+  const titles={home:'设备状态',register:'使用登记',records:'今日记录',rules:'使用说明',config:'同步配置',devices:'设备管理'};
   const subs={
-    home:'\u5b9e\u65f6\u67e5\u770b\u51b7\u6c34\u673a\u4e0e\u7a7a\u538b\u673a\u4f7f\u7528\u72b6\u6001',
-    register:'\u586b\u5199\u4f7f\u7528\u4fe1\u606f\uff0c\u7cfb\u7edf\u81ea\u52a8\u68c0\u6d4b\u65f6\u6bb5\u51b2\u7a81',
-    records:'\u67e5\u770b\u4eca\u65e5\u6240\u6709\u767b\u8bb0\u53ca\u5386\u53f2\u8bb0\u5f55',
-    rules:'\u7ba1\u7406\u5236\u5ea6\u4e0e\u64cd\u4f5c\u6d41\u7a0b\u8bf4\u660e'
+    home:'实时查看公辅设备使用状态',
+    register:'填写使用信息，系统自动检测时段冲突',
+    records:'查看今日所有登记及历史记录',
+    rules:'管理制度与操作流程说明',
+    config:'配置云端同步，实现多人数据共享',
+    devices:'添加或管理共享设备列表'
   };
   document.getElementById('pageTitle').textContent=titles[name];
   document.getElementById('pageSub').textContent=subs[name];
-  const idx={home:0,records:1,rules:2};
-  if(idx[name]!==undefined) document.querySelectorAll('.tabbar-item')[idx[name]].classList.add('active');
-  if(name==='home') renderHome();
-  if(name==='records') renderRecords();
-  if(name==='register') initRegister();
+  const idx={home:0,records:1,devices:2,rules:3};
+  if(idx[name]!==undefined)document.querySelectorAll('.tabbar-item')[idx[name]].classList.add('active');
+  if(name==='home')renderHome();
+  if(name==='records')renderRecords();
+  if(name==='register')initRegister();
+  if(name==='devices')renderDeviceList();
 }
+
+/* ========== 首页渲染（动态设备） ========== */
 function renderHome(){
   const now=new Date();
-  ['\u51b7\u6c34\u673a','\u7a7a\u538b\u673a'].forEach(dev=>{
-    const key=dev==='\u51b7\u6c34\u673a'?'chiller':'compressor';
-    const{active,future}=getDeviceStatus(dev);
-    const card=document.getElementById('card-'+key);
-    const info=document.getElementById('info-'+key);
-    const badge=document.getElementById('badge-'+key);
+  // 设备卡片
+  let gridHtml='';
+  devices.forEach(dev=>{
+    const devId='card_'+dev.id;
+    const{active,future}=getDeviceStatus(dev.name);
+    let cardClass='device-card idle';
+    let infoHtml='当前空闲<br>无待办登记';
+    let badgeClass='device-status status-idle';
+    let badgeText='空闲';
     if(active){
-      card.className='device-card busy';
-      info.innerHTML=active.dept+' \u00b7 '+active.user+'<br>\u9884\u8ba1 '+active.end+' \u7ed3\u675f';
-      badge.className='device-status status-busy';
-      badge.innerHTML='<span class="status-dot"></span>\u4f7f\u7528\u4e2d';
+      cardClass='device-card busy';
+      infoHtml=active.dept+' · '+active.user+'<br>预计 '+active.end+' 结束';
+      badgeClass='device-status status-busy';
+      badgeText='使用中';
     }else if(future.length>0){
       const next=future.sort((a,b)=>timeToMin(a.start)-timeToMin(b.start))[0];
-      card.className='device-card idle';
-      info.innerHTML='\u5f53\u524d\u7a7a\u95f2<br>\u4e0b\u4e00\u65f6\u6bb5 '+next.start+' ('+next.dept+')';
-      badge.className='device-status status-idle';
-      badge.innerHTML='<span class="status-dot"></span>\u7a7a\u95f2';
-    }else{
-      card.className='device-card idle';
-      info.innerHTML='\u5f53\u524d\u7a7a\u95f2<br>\u65e0\u5f85\u529e\u767b\u8bb0';
-      badge.className='device-status status-idle';
-      badge.innerHTML='<span class="status-dot"></span>\u7a7a\u95f2';
+      infoHtml='当前空闲<br>下一时段 '+next.start+' ('+next.dept+')';
     }
+    gridHtml+='<div class="'+cardClass+'" id="'+devId+'" onclick="showDeviceDetail(''+dev.name+'')">'+
+      '<div class="device-name">'+dev.name+'</div>'+
+      '<div class="device-info">'+infoHtml+'</div>'+
+      '<div class="'+badgeClass+'"><span class="status-dot"></span>'+badgeText+'</div></div>';
   });
+  document.getElementById('homeDeviceGrid').innerHTML=gridHtml||'<div class="empty">暂无设备，请先到"设备"页添加</div>';
+
+  // 时间线
   const slots=[];
-  for(let h=8;h<18;h+=2) slots.push(pad(h)+':00-'+pad(h+2)+':00');
+  for(let h=8;h<18;h+=2)slots.push(pad(h)+':00-'+pad(h+2)+':00');
   const todayRecs=getTodayRecords();
   let html='';
   slots.forEach(slot=>{
     const se=slot.split('-');
-    const chillerRecs=todayRecs.filter(r=>r.device==='\u51b7\u6c34\u673a'&&overlaps(se[0],se[1],r.start,r.end)&&!r.actualEnd);
-    const compRecs=todayRecs.filter(r=>r.device==='\u7a7a\u538b\u673a'&&overlaps(se[0],se[1],r.start,r.end)&&!r.actualEnd);
-    let chillerHtml='<span class="timeline-chip chip-empty">\u7a7a\u95f2</span>';
-    if(chillerRecs.length>0) chillerHtml=chillerRecs.map(r=>'<span class="timeline-chip chip-chiller">'+r.dept+' '+r.user+'</span>').join('');
-    let compHtml='<span class="timeline-chip chip-empty">\u7a7a\u95f2</span>';
-    if(compRecs.length>0) compHtml=compRecs.map(r=>'<span class="timeline-chip chip-compressor">'+r.dept+' '+r.user+'</span>').join('');
-    html+='<div class="timeline-row"><div class="timeline-time">'+slot+'</div><div class="timeline-content"><div>\u51b7\u6c34\u673a\uff1a'+chillerHtml+'</div><div>\u7a7a\u538b\u673a\uff1a'+compHtml+'</div></div></div>';
+    let slotHtml='<div class="timeline-time">'+slot+'</div><div class="timeline-content">';
+    devices.forEach(dev=>{
+      const devRecs=todayRecs.filter(r=>r.device===dev.name&&overlaps(se[0],se[1],r.start,r.end)&&!r.actualEnd);
+      let chipHtml='<span class="timeline-chip chip-empty">空闲</span>';
+      if(devRecs.length>0){
+        chipHtml=devRecs.map(r=>'<span class="timeline-chip" style="background:'+dev.color+'15;color:'+dev.color+'">'+r.dept+' '+r.user+'</span>').join('');
+      }
+      slotHtml+='<div>'+dev.name+'：'+chipHtml+'</div>';
+    });
+    slotHtml+='</div>';
+    html+='<div class="timeline-row">'+slotHtml+'</div>';
   });
   document.getElementById('timeline').innerHTML=html;
+
+  // 最近登记
   const recent=getTodayRecords().slice().reverse().slice(0,5);
   renderRecordList('recentRecords',recent,true);
 }
+
 function renderRecordList(containerId,list,isCompact){
   const container=document.getElementById(containerId);
-  if(list.length===0){container.innerHTML='<div class="empty">\u6682\u65e0\u8bb0\u5f55</div>';return;}
-  const now=new Date();
-  const curMin=now.getHours()*60+now.getMinutes();
+  if(list.length===0){container.innerHTML='<div class="empty">暂无记录</div>';return}
+  const now=new Date(),curMin=now.getHours()*60+now.getMinutes();
   container.innerHTML=list.map(r=>{
     const sMin=timeToMin(r.start),eMin=timeToMin(r.end);
-    let statusClass='tag-future',statusText='\u5f85\u5f00\u59cb';
-    if(r.actualEnd){statusClass='tag-done';statusText='\u5df2\u5b8c\u6210';}
-    else if(sMin<=curMin&&eMin>curMin){statusClass='tag-active';statusText='\u8fdb\u884c\u4e2d';}
+    let statusClass='tag-future',statusText='待开始';
+    if(r.actualEnd){statusClass='tag-done';statusText='已完成'}
+    else if(sMin<=curMin&&eMin>curMin){statusClass='tag-active';statusText='进行中'}
     const conflicts=getTodayRecords().filter(o=>o.id!==r.id&&o.device===r.device&&overlaps(r.start,r.end,o.start,o.end));
-    const conflictTag=conflicts.length>0?'<span class="record-status tag-conflict" style="margin-left:4px;">\u51b2\u7a81</span>':'';
-    const actions=!isCompact?'<div class="record-actions">'+(r.actualEnd?'':'<button class="btn-end" onclick="endRecord('+r.id+')">\u7ed3\u675f\u4f7f\u7528</button>')+(r.actualEnd?'':'<button class="btn-shutdown" onclick="confirmShutdown('+r.id+')">\u786e\u8ba4\u5173\u673a</button>')+'</div>':'';
-    return'<div class="record-item"><div class="record-left"><div class="record-dept">'+r.dept+' \u00b7 '+r.user+'</div><div class="record-time">'+r.start+' - '+r.end+(r.actualEnd?' (\u5b9e\u9645\u7ed3\u675f: '+r.actualEnd+')':'')+'</div>'+(r.note?'<div class="record-note">'+r.note+'</div>':'')+actions+'</div><div class="record-right"><span class="record-device">'+r.device+'</span><div style="margin-top:4px;"><span class="record-status '+statusClass+'">'+statusText+'</span>'+conflictTag+'</div></div></div>';
+    const conflictTag=conflicts.length>0?'<span class="record-status tag-conflict" style="margin-left:4px;">冲突</span>':'';
+    const actions=!isCompact?'<div class="record-actions">'+(r.actualEnd?'':'<button class="btn-end" onclick="endRecord(''+r.id+'')">结束使用</button>')+(r.actualEnd?'':'<button class="btn-shutdown" onclick="confirmShutdown(''+r.id+'')">确认关机</button>')+'</div>':'';
+    return'<div class="record-item"><div class="record-left"><div class="record-dept">'+r.dept+' · '+r.user+'</div><div class="record-time">'+r.start+' - '+r.end+(r.actualEnd?' (实际结束: '+r.actualEnd+')':'')+'</div>'+(r.note?'<div class="record-note">'+r.note+'</div>':'')+actions+'</div><div class="record-right"><span class="record-device">'+r.device+'</span><div style="margin-top:4px"><span class="record-status '+statusClass+'">'+statusText+'</span>'+conflictTag+'</div></div></div>';
   }).join('');
 }
-function renderRecords(){renderRecordList('allRecords',getTodayRecords().slice().reverse(),false);}
+function renderRecords(){renderRecordList('allRecords',getTodayRecords().slice().reverse(),false)}
+
+/* ========== 登记页 ========== */
 function initRegister(){
   const now=new Date();
   document.getElementById('regStart').value=formatTime(now);
@@ -456,9 +584,12 @@ function initRegister(){
   document.getElementById('regUser').value='';
   document.getElementById('regNote').value='';
   hideAlert('regAlert');
+  // 动态填充设备下拉框
+  const sel=document.getElementById('regDevice');
+  sel.innerHTML=devices.map(d=>'<option value="'+d.name+'">'+d.name+'</option>').join('');
 }
-function showAlert(id,msg,type){const el=document.getElementById(id);el.textContent=msg;el.className='alert show alert-'+type;}
-function hideAlert(id){document.getElementById(id).className='alert';}
+function showAlert(id,msg,type){const el=document.getElementById(id);el.textContent=msg;el.className='alert show alert-'+type}
+function hideAlert(id){document.getElementById(id).className='alert'}
 function submitRegister(){
   const dept=document.getElementById('regDept').value;
   const user=document.getElementById('regUser').value.trim();
@@ -466,51 +597,73 @@ function submitRegister(){
   const start=document.getElementById('regStart').value;
   const end=document.getElementById('regEnd').value;
   const note=document.getElementById('regNote').value.trim();
-  if(!user){showAlert('regAlert','\u8bf7\u8f93\u5165\u4f7f\u7528\u4eba\u59d3\u540d','warn');return;}
-  if(!start||!end){showAlert('regAlert','\u8bf7\u586b\u5199\u5b8c\u6574\u7684\u4f7f\u7528\u65f6\u6bb5','warn');return;}
-  if(timeToMin(start)>=timeToMin(end)){showAlert('regAlert','\u7ed3\u675f\u65f6\u95f4\u5fc5\u987b\u665a\u4e8e\u5f00\u59cb\u65f6\u95f4','warn');return;}
+  if(!user){showAlert('regAlert','请输入使用人姓名','warn');return}
+  if(!start||!end){showAlert('regAlert','请填写完整的使用时段','warn');return}
+  if(timeToMin(start)>=timeToMin(end)){showAlert('regAlert','结束时间必须晚于开始时间','warn');return}
   const todayRecs=getTodayRecords().filter(r=>r.device===device&&!r.actualEnd);
   const conflicts=todayRecs.filter(r=>overlaps(start,end,r.start,r.end));
   if(conflicts.length>0){
-    const html=conflicts.map(c=>'<div class="conflict-item">'+c.dept+' '+c.user+'\uff1a'+c.start+' - '+c.end+'</div>').join('');
-    showModal('\u65f6\u6bb5\u51b2\u7a81\u63d0\u9192','\u60a8\u767b\u8bb0\u7684\u65f6\u6bb5\u4e0e\u4ee5\u4e0b\u8bb0\u5f55\u91cd\u53e0\uff0c\u8bf7\u534f\u8c03\u6216\u9519\u5f00\u65f6\u6bb5\uff1a<div class="conflict-list">'+html+'</div>','\u4ecd\u8981\u767b\u8bb0',()=>doRegister(dept,user,device,start,end,note),true);
+    const html=conflicts.map(c=>'<div class="conflict-item">'+c.dept+' '+c.user+'：'+c.start+' - '+c.end+'</div>').join('');
+    showModal('时段冲突提醒','您登记的时段与以下记录重叠，请协调或错开时段：<div class="conflict-list">'+html+'</div>','仍要登记',()=>doRegister(dept,user,device,start,end,note),true);
     return;
   }
   doRegister(dept,user,device,start,end,note);
 }
-function doRegister(dept,user,device,start,end,note){
+async function doRegister(dept,user,device,start,end,note){
   const today=formatDate(new Date());
-  records.push({id:Date.now(),date:today,dept,user,device,start,end,actualEnd:'',note,status:'future'});
-  saveData();
-  showAlert('regAlert','\u767b\u8bb0\u6210\u529f\uff01\u8bf7\u7559\u610f\u8bbe\u5907\u72b6\u6001\uff0c\u907f\u514d\u63d0\u524d\u5173\u673a\u5f71\u54cd\u4ed6\u4eba','ok');
+  const newRec={id:Date.now().toString(),date:today,dept,user,device,start,end,actualEnd:'',note,status:'future'};
+  if(lcReady){
+    try{
+      const Rec=new lcClass();
+      Rec.set('date',today);Rec.set('dept',dept);Rec.set('user',user);Rec.set('device',device);
+      Rec.set('start',start);Rec.set('end',end);Rec.set('actualEnd','');Rec.set('note',note);Rec.set('status','future');
+      await Rec.save();
+      await fetchCloudData();
+    }catch(e){console.error('cloud save failed',e);showAlert('regAlert','云端保存失败，已降级到本地','warn');records.push(newRec);saveLocalData()}
+  }else{records.push(newRec);saveLocalData()}
+  showAlert('regAlert','登记成功！请留意设备状态，避免提前关机影响他人','ok');
   setTimeout(()=>goPage('home'),1200);
 }
-function endRecord(id){
-  const r=records.find(x=>x.id===id);
-  if(!r) return;
-  r.actualEnd=formatTime(new Date());
-  r.status='done';
-  saveData();
-  renderRecords();
-  renderHome();
-  showAlert('regAlert','\u5df2\u8bb0\u5f55\u5b9e\u9645\u7ed3\u675f\u65f6\u95f4','ok');
+async function endRecord(id){
+  const now=formatTime(new Date());
+  if(lcReady){
+    try{
+      const rec=AV.Object.createWithoutData('EquipmentRecord',id);
+      rec.set('actualEnd',now);rec.set('status','done');
+      await rec.save();
+      await fetchCloudData();
+    }catch(e){console.error('cloud update failed',e)}
+  }else{
+    const r=records.find(x=>x.id==id);
+    if(r){r.actualEnd=now;r.status='done';saveLocalData()}
+    renderRecords();renderHome();
+  }
 }
-function confirmShutdown(id){
-  const r=records.find(x=>x.id===id);
-  if(!r) return;
-  const todayRecs=getTodayRecords().filter(x=>x.device===r.device&&x.id!==r.id&&!x.actualEnd);
+async function confirmShutdown(id){
+  const r=records.find(x=>x.id==id);
+  if(!r)return;
+  const todayRecs=getTodayRecords().filter(x=>x.device===r.device&&x.id!=r.id&&!x.actualEnd);
   const nowMin=new Date().getHours()*60+new Date().getMinutes();
   const hasOthers=todayRecs.some(x=>timeToMin(x.end)>nowMin);
   if(hasOthers){
     const others=todayRecs.filter(x=>timeToMin(x.end)>nowMin);
-    const html=others.map(o=>'<div class="conflict-item">'+o.dept+' '+o.user+'\uff1a'+o.start+' - '+o.end+'</div>').join('');
-    showModal('\u26a0 \u4e0d\u53ef\u5173\u673a','\u8be5\u8bbe\u5907\u4ecd\u6709\u4ee5\u4e0b\u540e\u7eed\u4f7f\u7528\u8bb0\u5f55\uff0c<strong>\u4e25\u7981\u5173\u673a</strong>\uff1a<div class="conflict-list">'+html+'</div>','\u6211\u77e5\u9053\u4e86',closeModal,false);
+    const html=others.map(o=>'<div class="conflict-item">'+o.dept+' '+o.user+'：'+o.start+' - '+o.end+'</div>').join('');
+    showModal('⚠ 不可关机','该设备仍有以下后续使用记录，<strong>严禁关机</strong>：<div class="conflict-list">'+html+'</div>','我知道了',closeModal,false);
     return;
   }
-  showModal('\u5173\u673a\u786e\u8ba4','\u786e\u8ba4<strong>'+r.device+'</strong>\u5f53\u524d\u65e0\u5176\u4ed6\u90e8\u95e8\u4f7f\u7528\uff0c\u53ef\u4ee5\u6267\u884c\u5173\u673a\uff1f<br><br>\u5173\u673a\u540e\u8bf7\u5728\u8bbe\u5907\u65c1\u72b6\u6001\u770b\u677f\u66f4\u65b0\u4e3a"\u7a7a\u95f2"\u3002','\u786e\u8ba4\u5173\u673a',()=>{
-    r.actualEnd=formatTime(new Date());r.status='done';saveData();
-    renderRecords();renderHome();
-    showModal('\u5df2\u786e\u8ba4','\u5173\u673a\u786e\u8ba4\u5df2\u8bb0\u5f55\u3002\u611f\u8c22\u60a8\u9075\u5b88\u5171\u7528\u7ba1\u7406\u89c4\u8303\uff01','\u786e\u5b9a',closeModal,false);
+  showModal('关机确认','确认<strong>'+r.device+'</strong>当前无其他部门使用，可以执行关机？<br><br>关机后请在设备旁状态看板更新为"空闲"。','确认关机',async()=>{
+    if(lcReady){
+      try{
+        const rec=AV.Object.createWithoutData('EquipmentRecord',id);
+        rec.set('actualEnd',formatTime(new Date()));rec.set('status','done');
+        await rec.save();
+        await fetchCloudData();
+      }catch(e){}
+    }else{
+      r.actualEnd=formatTime(new Date());r.status='done';saveLocalData();
+      renderRecords();renderHome();
+    }
+    showModal('已确认','关机确认已记录。感谢您遵守共用管理规范！','确定',closeModal,false);
   },true);
 }
 function showModal(title,body,confirmText,onConfirm,showCancel){
@@ -518,41 +671,35 @@ function showModal(title,body,confirmText,onConfirm,showCancel){
   document.getElementById('modalBody').innerHTML=body;
   const actions=document.getElementById('modalActions');
   if(showCancel){
-    actions.innerHTML='<button class="modal-cancel" onclick="closeModal()">\u53d6\u6d88</button><button class="modal-confirm" id="modalConfirm">'+confirmText+'</button>';
-    document.getElementById('modalConfirm').onclick=()=>{closeModal();if(onConfirm)onConfirm();};
+    actions.innerHTML='<button class="modal-cancel" onclick="closeModal()">取消</button><button class="modal-confirm" id="modalConfirm">'+confirmText+'</button>';
+    document.getElementById('modalConfirm').onclick=()=>{closeModal();if(onConfirm)onConfirm()};
   }else{
     actions.innerHTML='<button class="modal-confirm" id="modalConfirm" style="width:100%">'+confirmText+'</button>';
-    document.getElementById('modalConfirm').onclick=()=>{closeModal();if(onConfirm)onConfirm();};
+    document.getElementById('modalConfirm').onclick=()=>{closeModal();if(onConfirm)onConfirm()};
   }
   document.getElementById('modalOverlay').classList.add('show');
 }
-function closeModal(){document.getElementById('modalOverlay').classList.remove('show');}
-function showDeviceDetail(device){
-  const{active,future}=getDeviceStatus(device);
+function closeModal(){document.getElementById('modalOverlay').classList.remove('show')}
+function showDeviceDetail(deviceName){
+  const{active,future}=getDeviceStatus(deviceName);
   let body='';
-  if(active) body+='<strong>\u5f53\u524d\u4f7f\u7528\u4e2d</strong><br>'+active.dept+' '+active.user+' \u00b7 '+active.start+'-'+active.end+'<br>'+(active.note||'')+'<br><br>';
-  else body+='<strong>\u5f53\u524d\u7a7a\u95f2</strong><br><br>';
-  if(future.length>0){
-    body+='<strong>\u540e\u7eed\u767b\u8bb0\uff1a</strong><br>';
-    future.forEach(r=>{body+='&bull; '+r.start+'-'+r.end+' '+r.dept+' '+r.user+'<br>';});
-  }else{
-    body+='\u65e0\u540e\u7eed\u767b\u8bb0\uff0c\u82e5\u5f53\u524d\u7a7a\u95f2\u5219\u53ef\u968f\u65f6\u4f7f\u7528\u3002';
-  }
-  showModal(device+' \u8be6\u60c5',body,'\u53bb\u767b\u8bb0',()=>{document.getElementById('regDevice').value=device;goPage('register');},true);
+  if(active)body+='<strong>当前使用中</strong><br>'+active.dept+' '+active.user+' · '+active.start+'-'+active.end+'<br>'+(active.note||'')+'<br><br>';
+  else body+='<strong>当前空闲</strong><br><br>';
+  if(future.length>0){body+='<strong>后续登记：</strong><br>';future.forEach(r=>{body+='&bull; '+r.start+'-'+r.end+' '+r.dept+' '+r.user+'<br>'})}
+  else body+='无后续登记，若当前空闲则可随时使用。';
+  showModal(deviceName+' 详情',body,'去登记',()=>{document.getElementById('regDevice').value=deviceName;goPage('register')},true);
 }
 function updateClock(){
   const n=new Date();
   document.getElementById('clock').textContent=pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
 }
-setInterval(updateClock,1000);
-updateClock();
-
-loadData();
-renderHome();
-
+setInterval(updateClock,1000);updateClock();
+initData();
 setInterval(()=>{
-  if(document.getElementById('page-home').classList.contains('active')) renderHome();
-  if(document.getElementById('page-records').classList.contains('active')) renderRecords();
+  if(!lcReady){
+    if(document.getElementById('page-home').classList.contains('active'))renderHome();
+    if(document.getElementById('page-records').classList.contains('active'))renderRecords();
+  }
 },60000);
 </script>
 </body>
