@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>公辅设备共享管理</title>
-<!-- CDN改为异步加载，避免网络阻塞导致页面卡死 -->
-<script async src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.2/dist/av-live-query-min.js" onerror="console.warn('LeanCloud CDN加载失败，将使用本地模式')"></script>
 <style>
 :root{--primary:#1a1a1a;--secondary:#666;--muted:#999;--light:#f5f5f5;--border:#e8e8e8;--green:#2e7d32;--green-bg:rgba(46,125,50,0.08);--orange:#e65100;--orange-bg:rgba(230,81,0,0.08);--red:#c62828;--red-bg:rgba(198,40,40,0.08);--blue:#1565c0;--blue-bg:rgba(21,101,192,0.08);--radius:10px;--shadow:0 1px 3px rgba(0,0,0,0.06)}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -168,7 +166,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
       <label class="form-label">备注（可选）</label>
       <input type="text" class="form-input" id="regNote" placeholder="例如：温度循环试验需持续运行">
     </div>
-    <button class="btn-primary" onclick="submitRegister()">提交登记</button>
+    <button class="btn-primary" id="btnSubmitReg">提交登记</button>
     <div class="hint"><strong>使用规则：</strong><br>① 使用前必须登记时段<br>② 时段冲突时系统会提醒协调<br>③ 最后离开人员确认无后续使用后方可关机</div>
   </div>
 </div>
@@ -187,16 +185,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
     <div class="form-group">
       <label class="form-label">标识颜色</label>
       <div class="color-picker-row" id="colorPicker">
-        <div class="color-option selected" style="background:#1565c0" data-color="#1565c0" onclick="selectColor(this)"></div>
-        <div class="color-option" style="background:#2e7d32" data-color="#2e7d32" onclick="selectColor(this)"></div>
-        <div class="color-option" style="background:#e65100" data-color="#e65100" onclick="selectColor(this)"></div>
-        <div class="color-option" style="background:#6a1b9a" data-color="#6a1b9a" onclick="selectColor(this)"></div>
-        <div class="color-option" style="background:#c62828" data-color="#c62828" onclick="selectColor(this)"></div>
-        <div class="color-option" style="background:#00695c" data-color="#00695c" onclick="selectColor(this)"></div>
-        <div class="color-option" style="background:#455a64" data-color="#455a64" onclick="selectColor(this)"></div>
+        <div class="color-option selected" style="background:#1565c0" data-color="#1565c0"></div>
+        <div class="color-option" style="background:#2e7d32" data-color="#2e7d32"></div>
+        <div class="color-option" style="background:#e65100" data-color="#e65100"></div>
+        <div class="color-option" style="background:#6a1b9a" data-color="#6a1b9a"></div>
+        <div class="color-option" style="background:#c62828" data-color="#c62828"></div>
+        <div class="color-option" style="background:#00695c" data-color="#00695c"></div>
+        <div class="color-option" style="background:#455a64" data-color="#455a64"></div>
       </div>
     </div>
-    <button class="btn-primary" onclick="addDevice()">添加设备</button>
+    <button class="btn-primary" id="btnAddDevice">添加设备</button>
   </div>
   <div class="section-title">现有设备</div>
   <div class="device-list" id="deviceList"><div class="empty">加载中...</div></div>
@@ -235,27 +233,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
     <input type="text" class="config-input" id="cfgAppKey" placeholder="如：xxxxxxxxxxxxxxxxxxxxxxxx">
     <label style="font-size:12px;color:var(--secondary);">Server URL</label>
     <input type="text" class="config-input" id="cfgServerUrl" placeholder="如：https://xxxxx.lc-cn-n1-shared.com">
-    <button class="btn-primary" onclick="saveConfig()">保存并连接</button>
-    <button class="btn-secondary" onclick="skipConfig()">暂不使用同步，继续本地模式</button>
+    <button class="btn-primary" id="btnSaveConfig">保存并连接</button>
+    <button class="btn-secondary" id="btnSkipConfig">暂不使用同步，继续本地模式</button>
     <div class="config-hint">
       没有账号？<a href="https://www.leancloud.cn/" target="_blank" style="color:var(--blue);">点击注册 LeanCloud</a> → 创建应用 → 复制 AppID / AppKey / 服务器地址
     </div>
   </div>
 </div>
 
-<button class="fab" onclick="goPage('register')">+</button>
+<button class="fab" id="btnFab">+</button>
 
 <div class="tabbar">
-  <div class="tabbar-item active" onclick="goPage('home')">
+  <div class="tabbar-item active" data-page="home">
     <div class="tabbar-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>状态
   </div>
-  <div class="tabbar-item" onclick="goPage('records')">
+  <div class="tabbar-item" data-page="records">
     <div class="tabbar-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>记录
   </div>
-  <div class="tabbar-item" onclick="goPage('devices')">
+  <div class="tabbar-item" data-page="devices">
     <div class="tabbar-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>设备
   </div>
-  <div class="tabbar-item" onclick="goPage('rules')">
+  <div class="tabbar-item" data-page="rules">
     <div class="tabbar-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div>说明
   </div>
 </div>
@@ -265,479 +263,435 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
     <div class="modal-title" id="modalTitle">提示</div>
     <div class="modal-body" id="modalBody"></div>
     <div class="modal-actions" id="modalActions">
-      <button class="modal-cancel" onclick="closeModal()">取消</button>
-      <button class="modal-confirm" id="modalConfirm" onclick="closeModal()">确定</button>
+      <button class="modal-cancel" id="modalCancel">取消</button>
+      <button class="modal-confirm" id="modalConfirm">确定</button>
     </div>
   </div>
 </div>
 
 <script>
 (function(){
-  "use strict";
+'use strict';
 
-  const LC_CONFIG={appId:"",appKey:"",serverURL:""};
-  let records=[],devices=[],lcReady=false,lcClass=null,lcDeviceClass=null;
-  let initDone=false;
+var LC_CONFIG = {appId:'',appKey:'',serverURL:''};
+var records = [], devices = [];
+var lcReady = false, lcClass = null, lcDeviceClass = null;
+var initDone = false;
 
-  const DEFAULT_DEVICES=[
-    {id:"dev_chiller",name:"冷水机",color:"#1565c0",builtin:true},
-    {id:"dev_compressor",name:"空压机",color:"#e65100",builtin:true}
+var DEFAULT_DEVICES = [
+  {id:'dev_chiller', name:'冷水机', color:'#1565c0', builtin:true},
+  {id:'dev_compressor', name:'空压机', color:'#e65100', builtin:true}
+];
+
+var TITLES = {home:'设备状态', register:'使用登记', records:'今日记录', rules:'使用说明', config:'同步配置', devices:'设备管理'};
+var SUBS = {
+  home:'实时查看公辅设备使用状态',
+  register:'填写使用信息，系统自动检测时段冲突',
+  records:'查看今日所有登记及历史记录',
+  rules:'管理制度与操作流程说明',
+  config:'配置云端同步，实现多人数据共享',
+  devices:'添加或管理共享设备列表'
+};
+
+/* ===== 安全存储 ===== */
+function safeGet(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
+function safeSet(k,v){ try{localStorage.setItem(k,v);}catch(e){} }
+
+/* ===== 工具函数 ===== */
+function pad(n){ return String(n).padStart(2,'0'); }
+function fmtDate(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function fmtTime(d){ return pad(d.getHours())+':'+pad(d.getMinutes()); }
+function timeToMin(t){ var p=t.split(':'); return parseInt(p[0])*60+parseInt(p[1]); }
+function overlaps(aS,aE,bS,bE){ return timeToMin(aS)<timeToMin(bE) && timeToMin(aE)>timeToMin(bS); }
+function todayRecs(){ return records.filter(function(r){ return r.date===fmtDate(new Date()); }); }
+
+function devStatus(name){
+  var now=new Date(), curMin=now.getHours()*60+now.getMinutes();
+  var recs=todayRecs().filter(function(r){ return r.device===name; });
+  var active=null, future=[];
+  for(var i=0;i<recs.length;i++){
+    var r=recs[i], s=timeToMin(r.start), e=timeToMin(r.end);
+    if(s<=curMin && (r.actualEnd?timeToMin(r.actualEnd)>curMin:e>curMin)){ active=r; }
+    else if(s>curMin && !r.actualEnd){ future.push(r); }
+  }
+  return {active:active, future:future};
+}
+
+/* ===== 数据加载 ===== */
+function loadDevices(){
+  try{ var raw=safeGet('eqm_devices_v1'); if(raw) devices=JSON.parse(raw); }
+  catch(e){ devices=[]; }
+  if(!devices || devices.length===0){ devices=JSON.parse(JSON.stringify(DEFAULT_DEVICES)); saveDevices(); }
+}
+function saveDevices(){ safeSet('eqm_devices_v1', JSON.stringify(devices)); }
+
+function loadRecords(){
+  try{ var raw=safeGet('eqm_records_v3'); if(raw) records=JSON.parse(raw); }
+  catch(e){ records=[]; }
+  if(!records || records.length===0) insertDemo();
+}
+function saveRecords(){ safeSet('eqm_records_v3', JSON.stringify(records)); }
+
+function insertDemo(){
+  var today=fmtDate(new Date());
+  records=[
+    {id:'1',date:today,dept:'生产测试',user:'张三',device:'冷水机',start:'08:00',end:'12:00',actualEnd:'11:55',note:'例行温循试验',status:'done'},
+    {id:'2',date:today,dept:'研发测试',user:'李四',device:'空压机',start:'09:00',end:'11:30',actualEnd:'',note:'气密性测试',status:'active'},
+    {id:'3',date:today,dept:'研发测试',user:'王五',device:'冷水机',start:'14:00',end:'17:00',actualEnd:'',note:'新产品验证',status:'future'},
+    {id:'4',date:today,dept:'生产测试',user:'赵六',device:'空压机',start:'11:00',end:'15:00',actualEnd:'',note:'产线联调',status:'future'},
+    {id:'5',date:today,dept:'研发测试',user:'孙七',device:'空压机',start:'11:30',end:'13:00',actualEnd:'',note:'临时加急测试',status:'future'}
   ];
+  saveRecords();
+}
 
-  /* ========== 安全包装localStorage ========== */
-  function safeGet(key){try{return localStorage.getItem(key)}catch(e){return null}}
-  function safeSet(key,val){try{localStorage.setItem(key,val)}catch(e){}}
-
-  /* ========== 设备管理 ========== */
-  function loadDevices(){
-    try{
-      const raw=safeGet("eqm_devices_v1");
-      if(raw){devices=JSON.parse(raw)}
-    }catch(e){devices=[]}
-    if(!devices||devices.length===0){devices=JSON.parse(JSON.stringify(DEFAULT_DEVICES));saveDevices()}
-  }
-  function saveDevices(){
-    safeSet("eqm_devices_v1",JSON.stringify(devices));
-  }
-
-  /* ========== 记录数据 ========== */
-  function loadLocalData(){
-    try{
-      const raw=safeGet("eqm_records_v3");
-      if(raw)records=JSON.parse(raw);
-    }catch(e){records=[]}
-    if(!records||records.length===0)insertDemoData();
-  }
-  function insertDemoData(){
-    const today=formatDate(new Date());
-    records=[
-      {id:"1",date:today,dept:"生产测试",user:"张三",device:"冷水机",start:"08:00",end:"12:00",actualEnd:"11:55",note:"例行温循试验",status:"done"},
-      {id:"2",date:today,dept:"研发测试",user:"李四",device:"空压机",start:"09:00",end:"11:30",actualEnd:"",note:"气密性测试",status:"active"},
-      {id:"3",date:today,dept:"研发测试",user:"王五",device:"冷水机",start:"14:00",end:"17:00",actualEnd:"",note:"新产品验证",status:"future"},
-      {id:"4",date:today,dept:"生产测试",user:"赵六",device:"空压机",start:"11:00",end:"15:00",actualEnd:"",note:"产线联调",status:"future"},
-      {id:"5",date:today,dept:"研发测试",user:"孙七",device:"空压机",start:"11:30",end:"13:00",actualEnd:"",note:"临时加急测试",status:"future"}
-    ];
-    saveLocalData();
-  }
-  function saveLocalData(){safeSet("eqm_records_v3",JSON.stringify(records))}
-
-  /* ========== LeanCloud 相关（带安全检查） ========== */
-  function updateSyncBadge(ok){
-    const el=document.getElementById("syncBadge");
-    if(!el)return;
-    if(ok){el.className="sync-badge sync-ok";el.innerHTML="<span class=\"sync-dot\"></span>云端同步"}
-    else{el.className="sync-badge sync-off";el.innerHTML="<span class=\"sync-dot\"></span>本地模式"}
-  }
-  async function tryInitLC(){
-    if(typeof AV==="undefined"){console.warn("AV未加载，跳过LeanCloud初始化");return false}
-    try{
-      AV.init(LC_CONFIG);
-      lcClass=AV.Object.extend("EquipmentRecord");
-      lcDeviceClass=AV.Object.extend("EquipmentDevice");
-      lcReady=true;
-      updateSyncBadge(true);
-      startLiveQuery();
-      return true;
-    }catch(e){console.error("LeanCloud init failed",e);return false}
-  }
-  let liveQuery=null;
-  async function startLiveQuery(){
-    if(!lcReady||typeof AV==="undefined")return;
-    try{
-      await fetchCloudDevices();
-      const query=new AV.Query("EquipmentRecord");
-      query.equalTo("date",formatDate(new Date()));
-      liveQuery=await AV.LiveQuery.init(query);
-      liveQuery.on("create",()=>fetchCloudData());
-      liveQuery.on("update",()=>fetchCloudData());
-      liveQuery.on("delete",()=>fetchCloudData());
-      fetchCloudData();
-    }catch(e){console.error("LiveQuery failed",e)}
-  }
-  async function fetchCloudData(){
-    if(!lcReady||typeof AV==="undefined")return;
-    try{
-      await fetchCloudDevices();
-      const query=new AV.Query("EquipmentRecord");
-      query.equalTo("date",formatDate(new Date()));
-      query.limit(1000);
-      const results=await query.find();
-      records=results.map(r=>({
-        id:r.id,date:r.get("date"),dept:r.get("dept"),user:r.get("user"),
-        device:r.get("device"),start:r.get("start"),end:r.get("end"),
-        actualEnd:r.get("actualEnd")||"",note:r.get("note")||"",status:r.get("status")||"future"
-      }));
-      refreshActivePages();
-    }catch(e){console.error("fetch failed",e)}
-  }
-  async function fetchCloudDevices(){
-    if(!lcReady||typeof AV==="undefined")return;
-    try{
-      const query=new AV.Query("EquipmentDevice");
-      query.limit(100);
-      const results=await query.find();
-      if(results.length>0){
-        devices=results.map(r=>({id:r.get("deviceId"),name:r.get("name"),color:r.get("color"),builtin:!!r.get("builtin")}));
-        safeSet("eqm_devices_v1",JSON.stringify(devices));
-      }
-    }catch(e){console.error("fetch devices failed",e)}
-  }
-  async function syncDevicesToCloud(){
-    if(!lcReady||typeof AV==="undefined"||!lcDeviceClass)return;
-    try{
-      const query=new AV.Query("EquipmentDevice");
-      const existing=await query.find();
-      if(existing.length>0)await AV.Object.destroyAll(existing);
-      const objs=devices.map(d=>{const o=new lcDeviceClass();o.set("deviceId",d.id);o.set("name",d.name);o.set("color",d.color);o.set("builtin",!!d.builtin);return o;});
-      await AV.Object.saveAll(objs);
-    }catch(e){console.error("device sync failed",e)}
-  }
-  function refreshActivePages(){
-    if(document.getElementById("page-home").classList.contains("active"))renderHome();
-    if(document.getElementById("page-records").classList.contains("active"))renderRecords();
-    if(document.getElementById("page-devices").classList.contains("active"))renderDeviceList();
-  }
-
-  /* ========== 初始化 ========== */
-  function initData(){
-    if(initDone)return;
-    loadDevices();
-    const saved=safeGet("eqm_lc_cfg");
-    if(saved){
-      try{Object.assign(LC_CONFIG,JSON.parse(saved))}catch(e){}
+/* ===== 渲染 ===== */
+function renderHome(){
+  var now=new Date();
+  var grid=document.getElementById('homeDeviceGrid');
+  var html='';
+  for(var i=0;i<devices.length;i++){
+    var dev=devices[i];
+    var st=devStatus(dev.name);
+    var cardClass='device-card idle';
+    var info='当前空闲<br>无待办登记';
+    var badgeClass='device-status status-idle';
+    var badgeText='空闲';
+    if(st.active){
+      cardClass='device-card busy';
+      info=st.active.dept+' · '+st.active.user+'<br>预计 '+st.active.end+' 结束';
+      badgeClass='device-status status-busy';
+      badgeText='使用中';
+    }else if(st.future.length>0){
+      var next=st.future.sort(function(a,b){ return timeToMin(a.start)-timeToMin(b.start); })[0];
+      info='当前空闲<br>下一时段 '+next.start+' ('+next.dept+')';
     }
-    let lcInitialized=false;
-    if(LC_CONFIG.appId&&LC_CONFIG.appKey&&LC_CONFIG.serverURL){
-      lcInitialized=tryInitLC();
-    }
-    if(!lcInitialized){
-      loadLocalData();
-      if(!saved){goPage("config");initDone=true;return}
-    }
-    renderHome();
-    initDone=true;
+    html += '<div class="'+cardClass+'" data-dev="'+dev.name+'">'+
+      '<div class="device-name">'+dev.name+'</div>'+
+      '<div class="device-info">'+info+'</div>'+
+      '<div class="'+badgeClass+'"><span class="status-dot"></span>'+badgeText+'</div></div>';
+  }
+  grid.innerHTML = html || '<div class="empty">暂无设备，请先到"设备"页添加</div>';
+
+  // 绑定卡片点击
+  var cards=grid.querySelectorAll('.device-card');
+  for(var c=0;c<cards.length;c++){
+    cards[c].onclick=function(){ showDevDetail(this.dataset.dev); };
   }
 
-  /* ========== 配置页 ========== */
-  window.saveConfig=function(){
-    const appId=document.getElementById("cfgAppId").value.trim();
-    const appKey=document.getElementById("cfgAppKey").value.trim();
-    const serverURL=document.getElementById("cfgServerUrl").value.trim();
-    if(!appId||!appKey||!serverURL){
-      showAlert("regAlert","请填写完整的 LeanCloud 配置信息","warn");
-      return;
-    }
-    LC_CONFIG.appId=appId;LC_CONFIG.appKey=appKey;LC_CONFIG.serverURL=serverURL;
-    safeSet("eqm_lc_cfg",JSON.stringify(LC_CONFIG));
-    location.reload();
-  }
-  window.skipConfig=function(){
-    safeSet("eqm_lc_cfg",JSON.stringify({skipped:true}));
-    goPage("home");
-  }
-
-  /* ========== 工具函数 ========== */
-  window.pad=function(n){return String(n).padStart(2,"0")}
-  window.formatDate=function(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
-  window.formatTime=function(d){return pad(d.getHours())+":"+pad(d.getMinutes())}
-  function timeToMin(t){const p=t.split(":");return parseInt(p[0])*60+parseInt(p[1])}
-  function overlaps(aS,aE,bS,bE){return timeToMin(aS)<timeToMin(bE)&&timeToMin(aE)>timeToMin(bS)}
-  function getTodayRecords(){return records.filter(r=>r.date===formatDate(new Date()))}
-  function getDeviceStatus(deviceName){
-    const now=new Date(),curMin=now.getHours()*60+now.getMinutes();
-    const todayRecs=getTodayRecords().filter(r=>r.device===deviceName);
-    const active=todayRecs.find(r=>{const s=timeToMin(r.start),e=timeToMin(r.end);return s<=curMin&&(r.actualEnd?timeToMin(r.actualEnd)>curMin:e>curMin)});
-    const future=todayRecs.filter(r=>timeToMin(r.start)>curMin&&!r.actualEnd);
-    return{active,future}
-  }
-
-  /* ========== 页面导航 ========== */
-  window.goPage=function(name){
-    document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
-    document.querySelectorAll(".tabbar-item").forEach(t=>t.classList.remove("active"));
-    const pageEl=document.getElementById("page-"+name);
-    if(pageEl)pageEl.classList.add("active");
-    const titles={home:"设备状态",register:"使用登记",records:"今日记录",rules:"使用说明",config:"同步配置",devices:"设备管理"};
-    const subs={home:"实时查看公辅设备使用状态",register:"填写使用信息，系统自动检测时段冲突",records:"查看今日所有登记及历史记录",rules:"管理制度与操作流程说明",config:"配置云端同步，实现多人数据共享",devices:"添加或管理共享设备列表"};
-    document.getElementById("pageTitle").textContent=titles[name]||"";
-    document.getElementById("pageSub").textContent=subs[name]||"";
-    const idx={home:0,records:1,devices:2,rules:3};
-    if(idx[name]!==undefined){
-      const tabs=document.querySelectorAll(".tabbar-item");
-      if(tabs[idx[name]])tabs[idx[name]].classList.add("active");
-    }
-    if(name==="home")renderHome();
-    if(name==="records")renderRecords();
-    if(name==="register")initRegister();
-    if(name==="devices")renderDeviceList();
-  }
-
-  /* ========== 首页渲染 ========== */
-  function renderHome(){
-    const now=new Date();
-    let gridHtml="";
-    devices.forEach(dev=>{
-      const devId="card_"+dev.id;
-      const{active,future}=getDeviceStatus(dev.name);
-      let cardClass="device-card idle";
-      let infoHtml="当前空闲<br>无待办登记";
-      let badgeClass="device-status status-idle";
-      let badgeText="空闲";
-      if(active){
-        cardClass="device-card busy";
-        infoHtml=active.dept+" · "+active.user+"<br>预计 "+active.end+" 结束";
-        badgeClass="device-status status-busy";
-        badgeText="使用中";
-      }else if(future.length>0){
-        const next=future.sort((a,b)=>timeToMin(a.start)-timeToMin(b.start))[0];
-        infoHtml="当前空闲<br>下一时段 "+next.start+" ("+next.dept+")";
-      }
-      gridHtml+="<div class=\""+cardClass+"\" id=\""+devId+"\" onclick=\"showDeviceDetail(&#39;"+dev.name+"&#39;)\">"+
-        "<div class=\"device-name\">"+dev.name+"</div>"+
-        "<div class=\"device-info\">"+infoHtml+"</div>"+
-        "<div class=\""+badgeClass+"\"><span class=\"status-dot\"></span>"+badgeText+"</div></div>";
-    });
-    document.getElementById("homeDeviceGrid").innerHTML=gridHtml||"<div class=\"empty\">暂无设备，请先到&quot;设备&quot;页添加</div>";
-
-    const slots=[];
-    for(let h=8;h<18;h+=2)slots.push(pad(h)+":00-"+pad(h+2)+":00");
-    const todayRecs=getTodayRecords();
-    let html="";
-    slots.forEach(slot=>{
-      const se=slot.split("-");
-      let slotHtml="<div class=\"timeline-time\">"+slot+"</div><div class=\"timeline-content\">";
-      devices.forEach(dev=>{
-        const devRecs=todayRecs.filter(r=>r.device===dev.name&&overlaps(se[0],se[1],r.start,r.end)&&!r.actualEnd);
-        let chipHtml="<span class=\"timeline-chip chip-empty\">空闲</span>";
-        if(devRecs.length>0){
-          chipHtml=devRecs.map(r=>"<span class=\"timeline-chip\" style=\"background:"+dev.color+"15;color:"+dev.color+"\">"+r.dept+" "+r.user+"</span>").join("");
+  // 时间线
+  var slots=[];
+  for(var h=8;h<18;h+=2) slots.push(pad(h)+':00-'+pad(h+2)+':00');
+  var trecs=todayRecs();
+  var thtml='';
+  for(var s=0;s<slots.length;s++){
+    var se=slots[s].split('-');
+    var row='<div class="timeline-time">'+slots[s]+'</div><div class="timeline-content">';
+    for(var d=0;d<devices.length;d++){
+      var dv=devices[d];
+      var drecs=trecs.filter(function(r){ return r.device===dv.name && overlaps(se[0],se[1],r.start,r.end) && !r.actualEnd; });
+      var chip='<span class="timeline-chip chip-empty">空闲</span>';
+      if(drecs.length>0){
+        chip='';
+        for(var dr=0;dr<drecs.length;dr++){
+          chip+='<span class="timeline-chip" style="background:'+dv.color+'15;color:'+dv.color+'">'+drecs[dr].dept+' '+drecs[dr].user+'</span>';
         }
-        slotHtml+="<div>"+dev.name+"："+chipHtml+"</div>";
-      });
-      slotHtml+="</div>";
-      html+="<div class=\"timeline-row\">"+slotHtml+"</div>";
-    });
-    document.getElementById("timeline").innerHTML=html;
-
-    const recent=getTodayRecords().slice().reverse().slice(0,5);
-    renderRecordList("recentRecords",recent,true);
-  }
-
-  function renderRecordList(containerId,list,isCompact){
-    const container=document.getElementById(containerId);
-    if(!container)return;
-    if(list.length===0){container.innerHTML="<div class=\"empty\">暂无记录</div>";return}
-    const now=new Date(),curMin=now.getHours()*60+now.getMinutes();
-    container.innerHTML=list.map(r=>{
-      const sMin=timeToMin(r.start),eMin=timeToMin(r.end);
-      let statusClass="tag-future",statusText="待开始";
-      if(r.actualEnd){statusClass="tag-done";statusText="已完成"}
-      else if(sMin<=curMin&&eMin>curMin){statusClass="tag-active";statusText="进行中"}
-      const conflicts=getTodayRecords().filter(o=>o.id!==r.id&&o.device===r.device&&overlaps(r.start,r.end,o.start,o.end));
-      const conflictTag=conflicts.length>0?"<span class=\"record-status tag-conflict\" style=\"margin-left:4px;\">冲突</span>":"";
-      const actions=!isCompact?"<div class=\"record-actions\">"+(r.actualEnd?"":"<button class=\"btn-end\" onclick=\"endRecord(&#39;"+r.id+"&#39;)\">结束使用</button>")+(r.actualEnd?"":"<button class=\"btn-shutdown\" onclick=\"confirmShutdown(&#39;"+r.id+"&#39;)\">确认关机</button>")+"</div>":"";
-      return"<div class=\"record-item\"><div class=\"record-left\"><div class=\"record-dept\">"+r.dept+" · "+r.user+"</div><div class=\"record-time\">"+r.start+" - "+r.end+(r.actualEnd?" (实际结束: "+r.actualEnd+")":"")+"</div>"+(r.note?"<div class=\"record-note\">"+r.note+"</div>":"")+actions+"</div><div class=\"record-right\"><span class=\"record-device\">"+r.device+"</span><div style=\"margin-top:4px\"><span class=\"record-status "+statusClass+"\">"+statusText+"</span>"+conflictTag+"</div></div></div>";
-    }).join("");
-  }
-  function renderRecords(){renderRecordList("allRecords",getTodayRecords().slice().reverse(),false)}
-
-  /* ========== 登记页 ========== */
-  function initRegister(){
-    const now=new Date();
-    document.getElementById("regStart").value=formatTime(now);
-    document.getElementById("regEnd").value=formatTime(new Date(now.getTime()+2*60*60*1000));
-    document.getElementById("regUser").value="";
-    document.getElementById("regNote").value="";
-    hideAlert("regAlert");
-    const sel=document.getElementById("regDevice");
-    if(sel)sel.innerHTML=devices.map(d=>"<option value=\""+d.name+"\">"+d.name+"</option>").join("");
-  }
-  window.showAlert=function(id,msg,type){const el=document.getElementById(id);if(!el)return;el.textContent=msg;el.className="alert show alert-"+type}
-  function hideAlert(id){const el=document.getElementById(id);if(el)el.className="alert"}
-  window.submitRegister=function(){
-    const dept=document.getElementById("regDept").value;
-    const user=document.getElementById("regUser").value.trim();
-    const device=document.getElementById("regDevice").value;
-    const start=document.getElementById("regStart").value;
-    const end=document.getElementById("regEnd").value;
-    const note=document.getElementById("regNote").value.trim();
-    if(!user){showAlert("regAlert","请输入使用人姓名","warn");return}
-    if(!start||!end){showAlert("regAlert","请填写完整的使用时段","warn");return}
-    if(timeToMin(start)>=timeToMin(end)){showAlert("regAlert","结束时间必须晚于开始时间","warn");return}
-    const todayRecs=getTodayRecords().filter(r=>r.device===device&&!r.actualEnd);
-    const conflicts=todayRecs.filter(r=>overlaps(start,end,r.start,r.end));
-    if(conflicts.length>0){
-      const html=conflicts.map(c=>"<div class=\"conflict-item\">"+c.dept+" "+c.user+"："+c.start+" - "+c.end+"</div>").join("");
-      showModal("时段冲突提醒","您登记的时段与以下记录重叠，请协调或错开时段：<div class=\"conflict-list\">"+html+"</div>","仍要登记",()=>doRegister(dept,user,device,start,end,note),true);
-      return;
-    }
-    doRegister(dept,user,device,start,end,note);
-  }
-  function doRegister(dept,user,device,start,end,note){
-    const today=formatDate(new Date());
-    const newRec={id:Date.now().toString(),date:today,dept,user,device,start,end,actualEnd:"",note,status:"future"};
-    if(lcReady&&lcClass){
-      try{
-        const Rec=new lcClass();
-        Rec.set("date",today);Rec.set("dept",dept);Rec.set("user",user);Rec.set("device",device);
-        Rec.set("start",start);Rec.set("end",end);Rec.set("actualEnd","");Rec.set("note",note);Rec.set("status","future");
-        Rec.save().then(()=>fetchCloudData()).catch(e=>{console.error("cloud save failed",e);records.push(newRec);saveLocalData()});
-      }catch(e){console.error(e);records.push(newRec);saveLocalData()}
-    }else{records.push(newRec);saveLocalData()}
-    showAlert("regAlert","登记成功！请留意设备状态，避免提前关机影响他人","ok");
-    setTimeout(()=>goPage("home"),1200);
-  }
-  window.endRecord=function(id){
-    const now=formatTime(new Date());
-    if(lcReady){
-      try{
-        const rec=AV.Object.createWithoutData("EquipmentRecord",id);
-        rec.set("actualEnd",now);rec.set("status","done");
-        rec.save().then(()=>fetchCloudData()).catch(e=>console.error(e));
-      }catch(e){console.error(e)}
-    }else{
-      const r=records.find(x=>x.id==id);
-      if(r){r.actualEnd=now;r.status="done";saveLocalData()}
-      renderRecords();renderHome();
-    }
-  }
-  window.confirmShutdown=function(id){
-    const r=records.find(x=>x.id==id);
-    if(!r)return;
-    const todayRecs=getTodayRecords().filter(x=>x.device===r.device&&x.id!=r.id&&!x.actualEnd);
-    const nowMin=new Date().getHours()*60+new Date().getMinutes();
-    const hasOthers=todayRecs.some(x=>timeToMin(x.end)>nowMin);
-    if(hasOthers){
-      const others=todayRecs.filter(x=>timeToMin(x.end)>nowMin);
-      const html=others.map(o=>"<div class=\"conflict-item\">"+o.dept+" "+o.user+"："+o.start+" - "+o.end+"</div>").join("");
-      showModal("⚠ 不可关机","该设备仍有以下后续使用记录，<strong>严禁关机</strong>：<div class=\"conflict-list\">"+html+"</div>","我知道了",closeModal,false);
-      return;
-    }
-    showModal("关机确认","确认<strong>"+r.device+"</strong>当前无其他部门使用，可以执行关机？<br><br>关机后请在设备旁状态看板更新为"空闲"。","确认关机",()=>{
-      if(lcReady){
-        try{
-          const rec=AV.Object.createWithoutData("EquipmentRecord",id);
-          rec.set("actualEnd",formatTime(new Date()));rec.set("status","done");
-          rec.save().then(()=>fetchCloudData()).catch(e=>{});
-        }catch(e){}
-      }else{
-        r.actualEnd=formatTime(new Date());r.status="done";saveLocalData();
-        renderRecords();renderHome();
       }
-      showModal("已确认","关机确认已记录。感谢您遵守共用管理规范！","确定",closeModal,false);
-    },true);
-  }
-
-  /* ========== 弹窗 ========== */
-  window.showModal=function(title,body,confirmText,onConfirm,showCancel){
-    document.getElementById("modalTitle").innerHTML=title;
-    document.getElementById("modalBody").innerHTML=body;
-    const actions=document.getElementById("modalActions");
-    if(showCancel){
-      actions.innerHTML="<button class=\"modal-cancel\" onclick=\"closeModal()\">取消</button><button class=\"modal-confirm\" id=\"modalConfirm\">"+confirmText+"</button>";
-      document.getElementById("modalConfirm").onclick=()=>{closeModal();if(onConfirm)onConfirm()};
-    }else{
-      actions.innerHTML="<button class=\"modal-confirm\" id=\"modalConfirm\" style=\"width:100%\">"+confirmText+"</button>";
-      document.getElementById("modalConfirm").onclick=()=>{closeModal();if(onConfirm)onConfirm()};
+      row+='<div>'+dv.name+'：'+chip+'</div>';
     }
-    document.getElementById("modalOverlay").classList.add("show");
+    row+='</div>';
+    thtml+='<div class="timeline-row">'+row+'</div>';
   }
-  window.closeModal=function(){document.getElementById("modalOverlay").classList.remove("show")}
-  window.showDeviceDetail=function(deviceName){
-    const{active,future}=getDeviceStatus(deviceName);
-    let body="";
-    if(active)body+="<strong>当前使用中</strong><br>"+active.dept+" "+active.user+" · "+active.start+"-"+active.end+"<br>"+(active.note||"")+"<br><br>";
-    else body+="<strong>当前空闲</strong><br><br>";
-    if(future.length>0){body+="<strong>后续登记：</strong><br>";future.forEach(r=>{body+="&bull; "+r.start+"-"+r.end+" "+r.dept+" "+r.user+"<br>"})}
-    else body+="无后续登记，若当前空闲则可随时使用。";
-    showModal(deviceName+" 详情",body,"去登记",()=>{document.getElementById("regDevice").value=deviceName;goPage("register")},true);
-  }
+  document.getElementById('timeline').innerHTML=thtml;
 
-  /* ========== 设备管理页 ========== */
-  window.selectColor=function(el){
-    document.querySelectorAll(".color-option").forEach(c=>c.classList.remove("selected"));
-    el.classList.add("selected");
-  }
-  function getSelectedColor(){
-    const sel=document.querySelector(".color-option.selected");
-    return sel?sel.dataset.color:"#1565c0";
-  }
-  window.addDevice=function(){
-    const name=document.getElementById("devName").value.trim();
-    if(!name){showAlert("devAlert","请输入设备名称","warn");return}
-    if(devices.some(d=>d.name===name)){showAlert("devAlert","该设备名称已存在","warn");return}
-    const id="dev_"+Date.now().toString(36);
-    const color=getSelectedColor();
-    devices.push({id,name,color,builtin:false});
-    saveDevices();
-    if(lcReady)syncDevicesToCloud().catch(e=>console.error(e));
-    document.getElementById("devName").value="";
-    renderDeviceList();
-    showAlert("devAlert","设备添加成功","ok");
-    if(document.getElementById("page-home").classList.contains("active"))renderHome();
-  }
-  window.deleteDevice=function(id){
-    const dev=devices.find(d=>d.id===id);
-    if(!dev||dev.builtin){showAlert("devAlert","默认设备不可删除","warn");return}
-    showModal("删除确认","确定删除设备 <strong>"+dev.name+"</strong> 吗？<br><br>删除后新登记将不再显示该设备，但历史记录保留。","确认删除",()=>{
-      devices=devices.filter(d=>d.id!==id);
-      saveDevices();
-      if(lcReady)syncDevicesToCloud().catch(e=>console.error(e));
-      renderDeviceList();
-      if(document.getElementById("page-home").classList.contains("active"))renderHome();
-    },true);
-  }
-  function renderDeviceList(){
-    const container=document.getElementById("deviceList");
-    if(!container)return;
-    if(devices.length===0){container.innerHTML="<div class=\"empty\">暂无设备</div>";return}
-    container.innerHTML=devices.map(d=>{
-      const isBuiltin=d.builtin?"<span style=\"font-size:11px;color:var(--muted);margin-left:6px;\">(默认)</span>":"";
-      const delBtn=d.builtin?"":"<button class=\"btn-del\" onclick=\"deleteDevice(&#39;"+d.id+"&#39;)\">删除</button>";
-      return "<div class=\"device-list-item\"><div class=\"device-list-left\"><div class=\"device-list-name\"><span class=\"device-color-dot\" style=\"background:"+d.color+"\"></span>"+d.name+isBuiltin+"</div><div class=\"device-list-meta\">ID: "+d.id+"</div></div><div class=\"device-list-actions\">"+delBtn+"</div></div>";
-    }).join("");
-  }
+  // 最近登记
+  var recent=todayRecs().slice().reverse().slice(0,5);
+  renderRecList('recentRecords', recent, true);
+}
 
-  /* ========== 时钟 ========== */
-  window.updateClock=function(){
-    const n=new Date();
-    const el=document.getElementById("clock");
-    if(el)el.textContent=pad(n.getHours())+":"+pad(n.getMinutes())+":"+pad(n.getSeconds());
-  }
-  setInterval(updateClock,1000);updateClock();
-
-  /* ========== 启动（带3秒兜底） ========== */
-  function boot(){
-    try{
-      initData();
-    }catch(e){
-      console.error("init failed",e);
-      // 强制兜底渲染
-      devices=JSON.parse(JSON.stringify(DEFAULT_DEVICES));
-      insertDemoData();
-      renderHome();
+function renderRecList(cid, list, compact){
+  var el=document.getElementById(cid);
+  if(!el) return;
+  if(list.length===0){ el.innerHTML='<div class="empty">暂无记录</div>'; return; }
+  var now=new Date(), curMin=now.getHours()*60+now.getMinutes();
+  var html='';
+  for(var i=0;i<list.length;i++){
+    var r=list[i];
+    var sMin=timeToMin(r.start), eMin=timeToMin(r.end);
+    var scls='tag-future', stxt='待开始';
+    if(r.actualEnd){ scls='tag-done'; stxt='已完成'; }
+    else if(sMin<=curMin && eMin>curMin){ scls='tag-active'; stxt='进行中'; }
+    var conflicts=todayRecs().filter(function(o){ return o.id!==r.id && o.device===r.device && overlaps(r.start,r.end,o.start,o.end); });
+    var ctag=conflicts.length>0?'<span class="record-status tag-conflict" style="margin-left:4px;">冲突</span>':'';
+    var acts='';
+    if(!compact && !r.actualEnd){
+      acts='<div class="record-actions"><button class="btn-end" data-end="'+r.id+'">结束使用</button><button class="btn-shutdown" data-shut="'+r.id+'">确认关机</button></div>';
     }
+    html+='<div class="record-item"><div class="record-left"><div class="record-dept">'+r.dept+' · '+r.user+'</div><div class="record-time">'+r.start+' - '+r.end+(r.actualEnd?' (实际结束: '+r.actualEnd+')':'')+'</div>'+(r.note?'<div class="record-note">'+r.note+'</div>':'')+acts+'</div><div class="record-right"><span class="record-device">'+r.device+'</span><div style="margin-top:4px"><span class="record-status '+scls+'">'+stxt+'</span>'+ctag+'</div></div></div>';
   }
-  if(document.readyState==="loading"){
-    document.addEventListener("DOMContentLoaded",boot);
+  el.innerHTML=html;
+  // 绑定按钮
+  if(!compact){
+    var eb=el.querySelectorAll('[data-end]');
+    for(var b=0;b<eb.length;b++) eb[b].onclick=function(){ doEnd(this.dataset.end); };
+    var sb=el.querySelectorAll('[data-shut]');
+    for(var b2=0;b2<sb.length;b2++) sb[b2].onclick=function(){ doShutdown(this.dataset.shut); };
+  }
+}
+function renderRecords(){ renderRecList('allRecords', todayRecs().slice().reverse(), false); }
+
+function renderDevList(){
+  var el=document.getElementById('deviceList');
+  if(!el) return;
+  if(devices.length===0){ el.innerHTML='<div class="empty">暂无设备</div>'; return; }
+  var html='';
+  for(var i=0;i<devices.length;i++){
+    var d=devices[i];
+    var builtinTag=d.builtin?'<span style="font-size:11px;color:var(--muted);margin-left:6px;">(默认)</span>':'';
+    var delBtn=d.builtin?'':'<button class="btn-del" data-del="'+d.id+'">删除</button>';
+    html+='<div class="device-list-item"><div class="device-list-left"><div class="device-list-name"><span class="device-color-dot" style="background:'+d.color+'"></span>'+d.name+builtinTag+'</div><div class="device-list-meta">ID: '+d.id+'</div></div><div class="device-list-actions">'+delBtn+'</div></div>';
+  }
+  el.innerHTML=html;
+  var db=el.querySelectorAll('[data-del]');
+  for(var b=0;b<db.length;b++) db[b].onclick=function(){ doDeleteDev(this.dataset.del); };
+}
+
+function initReg(){
+  var now=new Date();
+  document.getElementById('regStart').value=fmtTime(now);
+  document.getElementById('regEnd').value=fmtTime(new Date(now.getTime()+2*60*60*1000));
+  document.getElementById('regUser').value='';
+  document.getElementById('regNote').value='';
+  hideAlert('regAlert');
+  var sel=document.getElementById('regDevice');
+  var opts='';
+  for(var i=0;i<devices.length;i++) opts+='<option value="'+devices[i].name+'">'+devices[i].name+'</option>';
+  sel.innerHTML=opts;
+}
+
+/* ===== 导航 ===== */
+function goPage(name){
+  var pages=document.querySelectorAll('.page');
+  for(var i=0;i<pages.length;i++) pages[i].classList.remove('active');
+  var tabs=document.querySelectorAll('.tabbar-item');
+  for(var i2=0;i2<tabs.length;i2++) tabs[i2].classList.remove('active');
+  var pel=document.getElementById('page-'+name);
+  if(pel) pel.classList.add('active');
+  document.getElementById('pageTitle').textContent=TITLES[name]||'';
+  document.getElementById('pageSub').textContent=SUBS[name]||'';
+  var map={home:0, records:1, devices:2, rules:3};
+  if(map[name]!==undefined && tabs[map[name]]) tabs[map[name]].classList.add('active');
+  if(name==='home') renderHome();
+  if(name==='records') renderRecords();
+  if(name==='register') initReg();
+  if(name==='devices') renderDevList();
+}
+
+/* ===== 弹窗 ===== */
+var modalCb=null;
+function showModal(title, body, okText, cb, showCancel){
+  document.getElementById('modalTitle').innerHTML=title;
+  document.getElementById('modalBody').innerHTML=body;
+  modalCb=cb;
+  var okBtn=document.getElementById('modalConfirm');
+  var caBtn=document.getElementById('modalCancel');
+  okBtn.textContent=okText;
+  if(showCancel){ caBtn.style.display='block'; okBtn.style.width=''; }
+  else{ caBtn.style.display='none'; okBtn.style.width='100%'; }
+  document.getElementById('modalOverlay').classList.add('show');
+}
+document.getElementById('modalConfirm').onclick=function(){ closeModal(); if(modalCb) modalCb(); };
+document.getElementById('modalCancel').onclick=closeModal;
+function closeModal(){ document.getElementById('modalOverlay').classList.remove('show'); modalCb=null; }
+
+/* ===== 提示 ===== */
+function showAlert(id, msg, type){
+  var el=document.getElementById(id);
+  if(!el) return;
+  el.textContent=msg; el.className='alert show alert-'+type;
+}
+function hideAlert(id){ var el=document.getElementById(id); if(el) el.className='alert'; }
+
+/* ===== 登记逻辑 ===== */
+function submitReg(){
+  var dept=document.getElementById('regDept').value;
+  var user=document.getElementById('regUser').value.trim();
+  var device=document.getElementById('regDevice').value;
+  var start=document.getElementById('regStart').value;
+  var end=document.getElementById('regEnd').value;
+  var note=document.getElementById('regNote').value.trim();
+  if(!user){ showAlert('regAlert','请输入使用人姓名','warn'); return; }
+  if(!start||!end){ showAlert('regAlert','请填写完整的使用时段','warn'); return; }
+  if(timeToMin(start)>=timeToMin(end)){ showAlert('regAlert','结束时间必须晚于开始时间','warn'); return; }
+  var trecs=todayRecs().filter(function(r){ return r.device===device && !r.actualEnd; });
+  var conflicts=trecs.filter(function(r){ return overlaps(start,end,r.start,r.end); });
+  if(conflicts.length>0){
+    var html='<div class="conflict-list">';
+    for(var i=0;i<conflicts.length;i++) html+='<div class="conflict-item">'+conflicts[i].dept+' '+conflicts[i].user+'：'+conflicts[i].start+' - '+conflicts[i].end+'</div>';
+    html+='</div>';
+    showModal('时段冲突提醒','您登记的时段与以下记录重叠，请协调或错开时段：'+html,'仍要登记',function(){ doReg(dept,user,device,start,end,note); },true);
+    return;
+  }
+  doReg(dept,user,device,start,end,note);
+}
+function doReg(dept,user,device,start,end,note){
+  var today=fmtDate(new Date());
+  var rec={id:String(Date.now()),date:today,dept:dept,user:user,device:device,start:start,end:end,actualEnd:'',note:note,status:'future'};
+  records.push(rec); saveRecords();
+  showAlert('regAlert','登记成功！请留意设备状态，避免提前关机影响他人','ok');
+  setTimeout(function(){ goPage('home'); },1200);
+}
+
+/* ===== 结束/关机 ===== */
+function doEnd(id){
+  var now=fmtTime(new Date());
+  var r=records.find(function(x){ return x.id===id; });
+  if(r){ r.actualEnd=now; r.status='done'; saveRecords(); }
+  renderRecords(); renderHome();
+}
+function doShutdown(id){
+  var r=records.find(function(x){ return x.id===id; });
+  if(!r) return;
+  var trecs=todayRecs().filter(function(x){ return x.device===r.device && x.id!==r.id && !x.actualEnd; });
+  var nowMin=new Date().getHours()*60+new Date().getMinutes();
+  var others=trecs.filter(function(x){ return timeToMin(x.end)>nowMin; });
+  if(others.length>0){
+    var html='<div class="conflict-list">';
+    for(var i=0;i<others.length;i++) html+='<div class="conflict-item">'+others[i].dept+' '+others[i].user+'：'+others[i].start+' - '+others[i].end+'</div>';
+    html+='</div>';
+    showModal('⚠ 不可关机','该设备仍有以下后续使用记录，<strong>严禁关机</strong>：'+html,'我知道了',null,false);
+    return;
+  }
+  showModal('关机确认','确认<strong>'+r.device+'</strong>当前无其他部门使用，可以执行关机？<br><br>关机后请在设备旁状态看板更新为"空闲"。','确认关机',function(){
+    r.actualEnd=fmtTime(new Date()); r.status='done'; saveRecords();
+    renderRecords(); renderHome();
+    showModal('已确认','关机确认已记录。感谢您遵守共用管理规范！','确定',null,false);
+  },true);
+}
+
+/* ===== 设备详情弹窗 ===== */
+function showDevDetail(name){
+  var st=devStatus(name);
+  var body='';
+  if(st.active) body+='<strong>当前使用中</strong><br>'+st.active.dept+' '+st.active.user+' · '+st.active.start+'-'+st.active.end+'<br>'+(st.active.note||'')+'<br><br>';
+  else body+='<strong>当前空闲</strong><br><br>';
+  if(st.future.length>0){
+    body+='<strong>后续登记：</strong><br>';
+    for(var i=0;i<st.future.length;i++) body+='• '+st.future[i].start+'-'+st.future[i].end+' '+st.future[i].dept+' '+st.future[i].user+'<br>';
   }else{
-    boot();
+    body+='无后续登记，若当前空闲则可随时使用。';
   }
-  // 3秒强制兜底：如果仍未渲染，强制初始化
-  setTimeout(function(){
-    if(!initDone){
-      console.warn("3秒兜底触发，强制初始化");
-      devices=JSON.parse(JSON.stringify(DEFAULT_DEVICES));
-      if(!records||records.length===0)insertDemoData();
-      renderHome();
-      initDone=true;
-    }
-  },3000);
-  // 定时刷新
-  setInterval(function(){
-    if(document.getElementById("page-home").classList.contains("active"))renderHome();
-    if(document.getElementById("page-records").classList.contains("active"))renderRecords();
-  },60000);
+  showModal(name+' 详情',body,'去登记',function(){
+    document.getElementById('regDevice').value=name; goPage('register');
+  },true);
+}
+
+/* ===== 设备管理 ===== */
+function getSelColor(){
+  var sel=document.querySelector('.color-option.selected');
+  return sel?sel.dataset.color:'#1565c0';
+}
+function addDev(){
+  var name=document.getElementById('devName').value.trim();
+  if(!name){ showAlert('devAlert','请输入设备名称','warn'); return; }
+  var exists=false;
+  for(var i=0;i<devices.length;i++) if(devices[i].name===name){ exists=true; break; }
+  if(exists){ showAlert('devAlert','该设备名称已存在','warn'); return; }
+  var id='dev_'+Date.now().toString(36);
+  var color=getSelColor();
+  devices.push({id:id,name:name,color:color,builtin:false});
+  saveDevices();
+  document.getElementById('devName').value='';
+  renderDevList();
+  showAlert('devAlert','设备添加成功','ok');
+  if(document.getElementById('page-home').classList.contains('active')) renderHome();
+}
+function doDeleteDev(id){
+  var dev=null;
+  for(var i=0;i<devices.length;i++) if(devices[i].id===id){ dev=devices[i]; break; }
+  if(!dev || dev.builtin){ showAlert('devAlert','默认设备不可删除','warn'); return; }
+  showModal('删除确认','确定删除设备 <strong>'+dev.name+'</strong> 吗？<br><br>删除后新登记将不再显示该设备，但历史记录保留。','确认删除',function(){
+    devices=devices.filter(function(d){ return d.id!==id; });
+    saveDevices(); renderDevList();
+    if(document.getElementById('page-home').classList.contains('active')) renderHome();
+  },true);
+}
+
+/* ===== 颜色选择器 ===== */
+var colorOpts=document.querySelectorAll('.color-option');
+for(var c=0;c<colorOpts.length;c++){
+  colorOpts[c].onclick=function(){
+    for(var j=0;j<colorOpts.length;j++) colorOpts[j].classList.remove('selected');
+    this.classList.add('selected');
+  };
+}
+
+/* ===== 配置页 ===== */
+document.getElementById('btnSaveConfig').onclick=function(){
+  var appId=document.getElementById('cfgAppId').value.trim();
+  var appKey=document.getElementById('cfgAppKey').value.trim();
+  var serverURL=document.getElementById('cfgServerUrl').value.trim();
+  if(!appId||!appKey||!serverURL){ showAlert('regAlert','请填写完整的 LeanCloud 配置信息','warn'); return; }
+  LC_CONFIG.appId=appId; LC_CONFIG.appKey=appKey; LC_CONFIG.serverURL=serverURL;
+  safeSet('eqm_lc_cfg', JSON.stringify(LC_CONFIG));
+  location.reload();
+};
+document.getElementById('btnSkipConfig').onclick=function(){
+  safeSet('eqm_lc_cfg', JSON.stringify({skipped:true}));
+  goPage('home');
+};
+
+/* ===== 事件绑定 ===== */
+document.getElementById('btnSubmitReg').onclick=submitReg;
+document.getElementById('btnAddDevice').onclick=addDev;
+document.getElementById('btnFab').onclick=function(){ goPage('register'); };
+
+var tabItems=document.querySelectorAll('.tabbar-item');
+for(var t=0;t<tabItems.length;t++){
+  tabItems[t].onclick=function(){ goPage(this.dataset.page); };
+}
+
+/* ===== 时钟 ===== */
+function updateClock(){
+  var n=new Date();
+  var el=document.getElementById('clock');
+  if(el) el.textContent=pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
+}
+setInterval(updateClock,1000); updateClock();
+
+/* ===== 启动 ===== */
+function boot(){
+  if(initDone) return;
+  loadDevices();
+  var saved=safeGet('eqm_lc_cfg');
+  if(saved){ try{ JSON.parse(saved); }catch(e){} }
+  loadRecords();
+  if(!saved){ goPage('config'); initDone=true; return; }
+  renderHome();
+  initDone=true;
+}
+
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded', boot);
+}else{
+  boot();
+}
+
+// 3秒兜底
+setTimeout(function(){
+  if(!initDone){
+    console.warn('timeout fallback');
+    devices=JSON.parse(JSON.stringify(DEFAULT_DEVICES));
+    if(!records||records.length===0) insertDemo();
+    renderHome(); initDone=true;
+  }
+},3000);
+
+// 定时刷新
+setInterval(function(){
+  if(document.getElementById('page-home').classList.contains('active')) renderHome();
+  if(document.getElementById('page-records').classList.contains('active')) renderRecords();
+},60000);
+
 })();
 </script>
 </body>
