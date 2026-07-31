@@ -216,27 +216,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
   </div>
   <div class="rule-card">
     <div class="rule-title">四、数据同步说明</div>
-    <div class="rule-text"><strong>本地模式</strong>：数据保存在本机浏览器，换设备/清缓存会丢失，多人数据不互通。<br><br><strong>云端模式</strong>：配置 LeanCloud 后，所有人数据实时同步，支持多人同时查看和登记。<br>建议班组长统一配置后，将链接分发给所有人使用。</div>
+    <div class="rule-text"><strong>本地模式</strong>：数据保存在本机浏览器，换设备/清缓存会丢失，多人数据不互通。<br><br><strong>云端模式</strong>：配置 Supabase 后，所有人数据实时同步，支持多人同时查看和登记。<br>建议班组长统一配置后，将链接分发给所有人使用。</div>
   </div>
 </div>
 
 <div class="page" id="page-config">
   <div class="config-box">
-    <div class="config-title">配置云端同步（可选）</div>
+    <div class="config-title">配置 Supabase 云端同步（可选）</div>
     <div class="config-hint" style="margin-bottom:12px;">
       当前为<strong>本地模式</strong>，数据仅保存在本机浏览器中，多人无法共享。<br><br>
-      如需多人实时同步，请配置 LeanCloud（免费，5分钟搞定）：
+      如需多人实时同步，请配置 Supabase（免费）：
     </div>
-    <label style="font-size:12px;color:var(--secondary);">App ID</label>
-    <input type="text" class="config-input" id="cfgAppId" placeholder="如：xxxxxxxxxxxxxxxxxxxxxxxx">
-    <label style="font-size:12px;color:var(--secondary);">App Key</label>
-    <input type="text" class="config-input" id="cfgAppKey" placeholder="如：xxxxxxxxxxxxxxxxxxxxxxxx">
-    <label style="font-size:12px;color:var(--secondary);">Server URL</label>
-    <input type="text" class="config-input" id="cfgServerUrl" placeholder="如：https://xxxxx.lc-cn-n1-shared.com">
+    <label style="font-size:12px;color:var(--secondary);">Supabase URL</label>
+    <input type="text" class="config-input" id="cfgUrl" placeholder="如：https://xxxxx.supabase.co">
+    <label style="font-size:12px;color:var(--secondary);">Supabase Anon Key</label>
+    <input type="text" class="config-input" id="cfgKey" placeholder="如：eyJhbGciOiJIUzI1NiIs...">
     <button class="btn-primary" id="btnSaveConfig">保存并连接</button>
     <button class="btn-secondary" id="btnSkipConfig">暂不使用同步，继续本地模式</button>
     <div class="config-hint">
-      没有账号？<a href="https://www.leancloud.cn/" target="_blank" style="color:var(--blue);">点击注册 LeanCloud</a> → 创建应用 → 复制 AppID / AppKey / 服务器地址
+      没有账号？<a href="https://supabase.com" target="_blank" style="color:var(--blue);">点击注册 Supabase</a> → 创建项目 → 复制 URL 和 anon key
     </div>
   </div>
 </div>
@@ -273,10 +271,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 (function(){
 'use strict';
 
-var LC_CONFIG = {appId:'',appKey:'',serverURL:''};
-var records = [], devices = [];
-var lcReady = false, lcClass = null, lcDeviceClass = null;
+var SUP_URL = '';
+var SUP_KEY = '';
+var records = [];
+var devices = [];
+var cloudReady = false;
 var initDone = false;
+var syncTimer = null;
 
 var DEFAULT_DEVICES = [
   {id:'dev_chiller', name:'冷水机', color:'#1565c0', builtin:true},
@@ -289,7 +290,7 @@ var SUBS = {
   register:'填写使用信息，系统自动检测时段冲突',
   records:'查看今日所有登记及历史记录',
   rules:'管理制度与操作流程说明',
-  config:'配置云端同步，实现多人数据共享',
+  config:'配置 Supabase 云端同步，实现多人数据共享',
   devices:'添加或管理共享设备列表'
 };
 
@@ -317,21 +318,111 @@ function devStatus(name){
   return {active:active, future:future};
 }
 
-/* ===== 数据加载 ===== */
+/* ===== Supabase REST API ===== */
+function sbHeaders(){
+  return {
+    'Content-Type':'application/json',
+    'apikey':SUP_KEY,
+    'Authorization':'Bearer '+SUP_KEY,
+    'Prefer':'return=representation'
+  };
+}
+function sbFetch(path, opts){
+  if(!SUP_URL || !SUP_KEY) return Promise.reject('未配置');
+  var url = SUP_URL.replace(/\/$/,'') + '/rest/v1/' + path;
+  opts = opts || {};
+  opts.headers = sbHeaders();
+  return fetch(url, opts).then(function(res){
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return res.json();
+  });
+}
+
+function loadCloudRecords(){
+  var today = fmtDate(new Date());
+  return sbFetch('equipment_records?date=eq.'+today+'&select=*&order=id.desc').then(function(data){
+    records = (data || []).map(function(r){
+      return {
+        id: String(r.id), date: r.date, dept: r.dept, user: r.user,
+        device: r.device, start: r.start, end: r.end,
+        actualEnd: r.actualend || '', note: r.note || '', status: r.status || 'future'
+      };
+    });
+    saveLocalRecords();
+    refreshActivePages();
+  }).catch(function(e){ console.error('load records', e); });
+}
+function loadCloudDevices(){
+  return sbFetch('equipment_devices?select=*').then(function(data){
+    var arr = data || [];
+    if(arr.length>0){
+      devices = arr.map(function(r){
+        return {id: r.id, name: r.name, color: r.color, builtin: !!r.builtin};
+      });
+      saveLocalDevices();
+    }
+  }).catch(function(e){ console.error('load devices', e); });
+}
+function saveCloudRecord(rec){
+  var body = JSON.stringify({
+    id: parseInt(rec.id) || Date.now(),
+    date: rec.date, dept: rec.dept, user: rec.user,
+    device: rec.device, start: rec.start, end: rec.end,
+    actualend: rec.actualEnd || null, note: rec.note || '', status: rec.status || 'future'
+  });
+  return sbFetch('equipment_records', {method:'POST', body:body}).catch(function(e){
+    console.error('save record', e);
+  });
+}
+function updateCloudRecord(id, updates){
+  var body = JSON.stringify({
+    actualend: updates.actualEnd || null,
+    status: updates.status || 'done'
+  });
+  return sbFetch('equipment_records?id=eq.'+id, {method:'PATCH', body:body}).catch(function(e){
+    console.error('update record', e);
+  });
+}
+function saveCloudDevice(dev){
+  var body = JSON.stringify({id:dev.id, name:dev.name, color:dev.color, builtin:!!dev.builtin});
+  return sbFetch('equipment_devices', {method:'POST', body:body}).catch(function(e){ console.error(e); });
+}
+function deleteCloudDevice(id){
+  return sbFetch('equipment_devices?id=eq.'+id, {method:'DELETE'}).catch(function(e){ console.error(e); });
+}
+function syncAllDevices(){
+  return sbFetch('equipment_devices?select=*').then(function(data){
+    var arr = data || [];
+    var toDel = arr.filter(function(r){ return !devices.find(function(d){ return d.id===r.id; }); });
+    var toAdd = devices.filter(function(d){ return !arr.find(function(r){ return r.id===d.id; }); });
+    var p = Promise.resolve();
+    toDel.forEach(function(r){ p = p.then(function(){ return deleteCloudDevice(r.id); }); });
+    toAdd.forEach(function(d){ p = p.then(function(){ return saveCloudDevice(d); }); });
+    return p;
+  }).catch(function(e){ console.error(e); });
+}
+function startPolling(){
+  if(syncTimer) clearInterval(syncTimer);
+  syncTimer = setInterval(function(){
+    if(cloudReady){
+      loadCloudRecords().then(function(){ loadCloudDevices(); });
+    }
+  }, 10000);
+}
+
+/* ===== 本地数据 ===== */
 function loadDevices(){
   try{ var raw=safeGet('eqm_devices_v1'); if(raw) devices=JSON.parse(raw); }
   catch(e){ devices=[]; }
-  if(!devices || devices.length===0){ devices=JSON.parse(JSON.stringify(DEFAULT_DEVICES)); saveDevices(); }
+  if(!devices || devices.length===0){ devices=JSON.parse(JSON.stringify(DEFAULT_DEVICES)); saveLocalDevices(); }
 }
-function saveDevices(){ safeSet('eqm_devices_v1', JSON.stringify(devices)); }
-
+function saveLocalDevices(){ safeSet('eqm_devices_v1', JSON.stringify(devices)); }
 function loadRecords(){
   try{ var raw=safeGet('eqm_records_v3'); if(raw) records=JSON.parse(raw); }
   catch(e){ records=[]; }
   if(!records || records.length===0) insertDemo();
 }
-function saveRecords(){ safeSet('eqm_records_v3', JSON.stringify(records)); }
-
+function saveLocalRecords(){ safeSet('eqm_records_v3', JSON.stringify(records)); }
 function insertDemo(){
   var today=fmtDate(new Date());
   records=[
@@ -341,7 +432,7 @@ function insertDemo(){
     {id:'4',date:today,dept:'生产测试',user:'赵六',device:'空压机',start:'11:00',end:'15:00',actualEnd:'',note:'产线联调',status:'future'},
     {id:'5',date:today,dept:'研发测试',user:'孙七',device:'空压机',start:'11:30',end:'13:00',actualEnd:'',note:'临时加急测试',status:'future'}
   ];
-  saveRecords();
+  saveLocalRecords();
 }
 
 /* ===== 渲染 ===== */
@@ -371,14 +462,11 @@ function renderHome(){
       '<div class="'+badgeClass+'"><span class="status-dot"></span>'+badgeText+'</div></div>';
   }
   grid.innerHTML = html || '<div class="empty">暂无设备，请先到"设备"页添加</div>';
-
-  // 绑定卡片点击
   var cards=grid.querySelectorAll('.device-card');
   for(var c=0;c<cards.length;c++){
     cards[c].onclick=function(){ showDevDetail(this.dataset.dev); };
   }
 
-  // 时间线
   var slots=[];
   for(var h=8;h<18;h+=2) slots.push(pad(h)+':00-'+pad(h+2)+':00');
   var trecs=todayRecs();
@@ -403,7 +491,6 @@ function renderHome(){
   }
   document.getElementById('timeline').innerHTML=thtml;
 
-  // 最近登记
   var recent=todayRecs().slice().reverse().slice(0,5);
   renderRecList('recentRecords', recent, true);
 }
@@ -429,7 +516,6 @@ function renderRecList(cid, list, compact){
     html+='<div class="record-item"><div class="record-left"><div class="record-dept">'+r.dept+' · '+r.user+'</div><div class="record-time">'+r.start+' - '+r.end+(r.actualEnd?' (实际结束: '+r.actualEnd+')':'')+'</div>'+(r.note?'<div class="record-note">'+r.note+'</div>':'')+acts+'</div><div class="record-right"><span class="record-device">'+r.device+'</span><div style="margin-top:4px"><span class="record-status '+scls+'">'+stxt+'</span>'+ctag+'</div></div></div>';
   }
   el.innerHTML=html;
-  // 绑定按钮
   if(!compact){
     var eb=el.querySelectorAll('[data-end]');
     for(var b=0;b<eb.length;b++) eb[b].onclick=function(){ doEnd(this.dataset.end); };
@@ -486,6 +572,12 @@ function goPage(name){
   if(name==='devices') renderDevList();
 }
 
+function refreshActivePages(){
+  if(document.getElementById('page-home').classList.contains('active')) renderHome();
+  if(document.getElementById('page-records').classList.contains('active')) renderRecords();
+  if(document.getElementById('page-devices').classList.contains('active')) renderDevList();
+}
+
 /* ===== 弹窗 ===== */
 var modalCb=null;
 function showModal(title, body, okText, cb, showCancel){
@@ -536,7 +628,8 @@ function submitReg(){
 function doReg(dept,user,device,start,end,note){
   var today=fmtDate(new Date());
   var rec={id:String(Date.now()),date:today,dept:dept,user:user,device:device,start:start,end:end,actualEnd:'',note:note,status:'future'};
-  records.push(rec); saveRecords();
+  records.push(rec); saveLocalRecords();
+  if(cloudReady) saveCloudRecord(rec);
   showAlert('regAlert','登记成功！请留意设备状态，避免提前关机影响他人','ok');
   setTimeout(function(){ goPage('home'); },1200);
 }
@@ -545,7 +638,8 @@ function doReg(dept,user,device,start,end,note){
 function doEnd(id){
   var now=fmtTime(new Date());
   var r=records.find(function(x){ return x.id===id; });
-  if(r){ r.actualEnd=now; r.status='done'; saveRecords(); }
+  if(r){ r.actualEnd=now; r.status='done'; saveLocalRecords(); }
+  if(cloudReady) updateCloudRecord(id, {actualEnd:now, status:'done'});
   renderRecords(); renderHome();
 }
 function doShutdown(id){
@@ -562,7 +656,8 @@ function doShutdown(id){
     return;
   }
   showModal('关机确认','确认<strong>'+r.device+'</strong>当前无其他部门使用，可以执行关机？<br><br>关机后请在设备旁状态看板更新为"空闲"。','确认关机',function(){
-    r.actualEnd=fmtTime(new Date()); r.status='done'; saveRecords();
+    r.actualEnd=fmtTime(new Date()); r.status='done'; saveLocalRecords();
+    if(cloudReady) updateCloudRecord(id, {actualEnd:r.actualEnd, status:'done'});
     renderRecords(); renderHome();
     showModal('已确认','关机确认已记录。感谢您遵守共用管理规范！','确定',null,false);
   },true);
@@ -599,7 +694,8 @@ function addDev(){
   var id='dev_'+Date.now().toString(36);
   var color=getSelColor();
   devices.push({id:id,name:name,color:color,builtin:false});
-  saveDevices();
+  saveLocalDevices();
+  if(cloudReady) saveCloudDevice({id:id,name:name,color:color,builtin:false});
   document.getElementById('devName').value='';
   renderDevList();
   showAlert('devAlert','设备添加成功','ok');
@@ -611,7 +707,9 @@ function doDeleteDev(id){
   if(!dev || dev.builtin){ showAlert('devAlert','默认设备不可删除','warn'); return; }
   showModal('删除确认','确定删除设备 <strong>'+dev.name+'</strong> 吗？<br><br>删除后新登记将不再显示该设备，但历史记录保留。','确认删除',function(){
     devices=devices.filter(function(d){ return d.id!==id; });
-    saveDevices(); renderDevList();
+    saveLocalDevices();
+    if(cloudReady) deleteCloudDevice(id);
+    renderDevList();
     if(document.getElementById('page-home').classList.contains('active')) renderHome();
   },true);
 }
@@ -626,24 +724,40 @@ for(var c=0;c<colorOpts.length;c++){
 }
 
 /* ===== 配置页 ===== */
-document.getElementById('btnSaveConfig').onclick=function(){
-  var appId=document.getElementById('cfgAppId').value.trim();
-  var appKey=document.getElementById('cfgAppKey').value.trim();
-  var serverURL=document.getElementById('cfgServerUrl').value.trim();
-  if(!appId||!appKey||!serverURL){ showAlert('regAlert','请填写完整的 LeanCloud 配置信息','warn'); return; }
-  LC_CONFIG.appId=appId; LC_CONFIG.appKey=appKey; LC_CONFIG.serverURL=serverURL;
-  safeSet('eqm_lc_cfg', JSON.stringify(LC_CONFIG));
-  location.reload();
-};
-document.getElementById('btnSkipConfig').onclick=function(){
-  safeSet('eqm_lc_cfg', JSON.stringify({skipped:true}));
+function saveConfig(){
+  var url=document.getElementById('cfgUrl').value.trim();
+  var key=document.getElementById('cfgKey').value.trim();
+  if(!url||!key){ showAlert('regAlert','请填写完整的 Supabase 配置信息','warn'); return; }
+  SUP_URL=url; SUP_KEY=key;
+  safeSet('eqm_sup_cfg', JSON.stringify({url:SUP_URL, key:SUP_KEY}));
+  cloudReady=true;
+  updateSyncBadge(true);
+  loadCloudDevices().then(function(){ return loadCloudRecords(); }).then(function(){
+    showAlert('regAlert','云端连接成功！','ok');
+    startPolling();
+    setTimeout(function(){ goPage('home'); }, 800);
+  }).catch(function(e){
+    showAlert('regAlert','连接失败：'+e.message,'warn');
+    cloudReady=false; updateSyncBadge(false);
+  });
+}
+function skipConfig(){
+  safeSet('eqm_sup_cfg', JSON.stringify({skipped:true}));
   goPage('home');
-};
+}
+function updateSyncBadge(ok){
+  var el=document.getElementById('syncBadge');
+  if(!el) return;
+  if(ok){ el.className='sync-badge sync-ok'; el.innerHTML='<span class="sync-dot"></span>云端同步'; }
+  else{ el.className='sync-badge sync-off'; el.innerHTML='<span class="sync-dot"></span>本地模式'; }
+}
 
 /* ===== 事件绑定 ===== */
 document.getElementById('btnSubmitReg').onclick=submitReg;
 document.getElementById('btnAddDevice').onclick=addDev;
 document.getElementById('btnFab').onclick=function(){ goPage('register'); };
+document.getElementById('btnSaveConfig').onclick=saveConfig;
+document.getElementById('btnSkipConfig').onclick=skipConfig;
 
 var tabItems=document.querySelectorAll('.tabbar-item');
 for(var t=0;t<tabItems.length;t++){
@@ -662,8 +776,18 @@ setInterval(updateClock,1000); updateClock();
 function boot(){
   if(initDone) return;
   loadDevices();
-  var saved=safeGet('eqm_lc_cfg');
-  if(saved){ try{ JSON.parse(saved); }catch(e){} }
+  var saved=safeGet('eqm_sup_cfg');
+  if(saved){
+    try{
+      var cfg=JSON.parse(saved);
+      if(cfg.url && cfg.key && !cfg.skipped){
+        SUP_URL=cfg.url; SUP_KEY=cfg.key; cloudReady=true; updateSyncBadge(true);
+        loadCloudDevices().then(function(){ return loadCloudRecords(); }).then(function(){
+          startPolling();
+        }).catch(function(e){ console.error(e); });
+      }
+    }catch(e){}
+  }
   loadRecords();
   if(!saved){ goPage('config'); initDone=true; return; }
   renderHome();
@@ -676,7 +800,6 @@ if(document.readyState==='loading'){
   boot();
 }
 
-// 3秒兜底
 setTimeout(function(){
   if(!initDone){
     console.warn('timeout fallback');
@@ -686,7 +809,6 @@ setTimeout(function(){
   }
 },3000);
 
-// 定时刷新
 setInterval(function(){
   if(document.getElementById('page-home').classList.contains('active')) renderHome();
   if(document.getElementById('page-records').classList.contains('active')) renderRecords();
