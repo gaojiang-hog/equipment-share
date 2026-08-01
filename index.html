@@ -120,6 +120,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 <base target="_blank">
 <base target="_blank">
 <base target="_blank">
+<base target="_blank">
 </head>
 <body>
 
@@ -350,7 +351,8 @@ function loadCloudRecords(){
       return {
         id: String(r.id), date: r.date, dept: r.dept, user: r.user,
         device: r.device, start: r.start, end: r.end,
-        actualEnd: r.actualend || '', note: r.note || '', status: r.status || 'future'
+        actualEnd: r.actualend || '', note: r.note || '', status: r.status || 'future',
+        shutdown: !!r.shutdown
       };
     });
     saveLocalRecords();
@@ -373,7 +375,8 @@ function saveCloudRecord(rec){
     id: parseInt(rec.id) || Date.now(),
     date: rec.date, dept: rec.dept, user: rec.user,
     device: rec.device, start: rec.start, end: rec.end,
-    actualend: rec.actualEnd || null, note: rec.note || '', status: rec.status || 'future'
+    actualend: rec.actualEnd || null, note: rec.note || '', status: rec.status || 'future',
+    shutdown: !!rec.shutdown
   });
   return sbFetch('equipment_records', {method:'POST', body:body}).catch(function(e){
     console.error('save record', e);
@@ -382,7 +385,8 @@ function saveCloudRecord(rec){
 function updateCloudRecord(id, updates){
   var body = JSON.stringify({
     actualend: updates.actualEnd || null,
-    status: updates.status || 'done'
+    status: updates.status || 'done',
+    shutdown: !!updates.shutdown
   });
   return sbFetch('equipment_records?id=eq.'+id, {method:'PATCH', body:body}).catch(function(e){
     console.error('update record', e);
@@ -430,11 +434,11 @@ function saveLocalRecords(){ safeSet('eqm_records_v3', JSON.stringify(records));
 function insertDemo(){
   var today=fmtDate(new Date());
   records=[
-    {id:'1',date:today,dept:'生产测试',user:'张三',device:'冷水机',start:'08:00',end:'12:00',actualEnd:'11:55',note:'例行温循试验',status:'done'},
-    {id:'2',date:today,dept:'研发测试',user:'李四',device:'空压机',start:'09:00',end:'11:30',actualEnd:'',note:'气密性测试',status:'active'},
-    {id:'3',date:today,dept:'研发测试',user:'王五',device:'冷水机',start:'14:00',end:'17:00',actualEnd:'',note:'新产品验证',status:'future'},
-    {id:'4',date:today,dept:'生产测试',user:'赵六',device:'空压机',start:'11:00',end:'15:00',actualEnd:'',note:'产线联调',status:'future'},
-    {id:'5',date:today,dept:'研发测试',user:'孙七',device:'空压机',start:'11:30',end:'13:00',actualEnd:'',note:'临时加急测试',status:'future'}
+    {id:'1',date:today,dept:'生产测试',user:'张三',device:'冷水机',start:'08:00',end:'12:00',actualEnd:'11:55',note:'例行温循试验',status:'done',shutdown:true},
+    {id:'2',date:today,dept:'研发测试',user:'李四',device:'空压机',start:'09:00',end:'11:30',actualEnd:'',note:'气密性测试',status:'active',shutdown:false},
+    {id:'3',date:today,dept:'研发测试',user:'王五',device:'冷水机',start:'14:00',end:'17:00',actualEnd:'',note:'新产品验证',status:'future',shutdown:false},
+    {id:'4',date:today,dept:'生产测试',user:'赵六',device:'空压机',start:'11:00',end:'15:00',actualEnd:'',note:'产线联调',status:'future',shutdown:false},
+    {id:'5',date:today,dept:'研发测试',user:'孙七',device:'空压机',start:'11:30',end:'13:00',actualEnd:'',note:'临时加急测试',status:'future',shutdown:false}
   ];
   saveLocalRecords();
 }
@@ -516,6 +520,8 @@ function renderRecList(cid, list, compact){
     if(!compact){
       if(!r.actualEnd){
         acts='<div class="record-actions"><button class="btn-end" data-end="'+r.id+'">结束使用</button><button class="btn-shutdown" data-shut="'+r.id+'">确认关机</button></div>';
+      } else if(r.shutdown){
+        acts='<div class="record-actions"><button class="btn-shutdown" disabled style="opacity:0.5;cursor:not-allowed;background:var(--green-bg);color:var(--green);border-color:rgba(46,125,50,0.3);">已关机</button></div>';
       } else {
         acts='<div class="record-actions"><button class="btn-shutdown" data-shut="'+r.id+'">确认关机</button></div>';
       }
@@ -640,7 +646,7 @@ function submitReg(){
 }
 function doReg(dept,user,device,start,end,note){
   var today=fmtDate(new Date());
-  var rec={id:String(Date.now()),date:today,dept:dept,user:user,device:device,start:start,end:end,actualEnd:'',note:note,status:'future'};
+  var rec={id:String(Date.now()),date:today,dept:dept,user:user,device:device,start:start,end:end,actualEnd:'',note:note,status:'future',shutdown:false};
   records.push(rec); saveLocalRecords();
   if(cloudReady) saveCloudRecord(rec);
   showAlert('regAlert','登记成功！请留意设备状态，避免提前关机影响他人','ok');
@@ -676,9 +682,11 @@ function doShutdown(id){
   showModal('关机确认','确认<strong>'+r.device+'</strong>当前无其他部门使用，可以执行关机？<br><br>关机后请在设备旁状态看板更新为"空闲"。','确认关机',function(){
     // 如果当前记录还没有actualEnd（理论上不会走到这里，因为前面已经检查了），先结束
     if(!r.actualEnd){
-      r.actualEnd=fmtTime(new Date()); r.status='done'; saveLocalRecords();
-      if(cloudReady) updateCloudRecord(id, {actualEnd:r.actualEnd, status:'done'});
+      r.actualEnd=fmtTime(new Date()); r.status='done';
     }
+    r.shutdown = true;
+    saveLocalRecords();
+    if(cloudReady) updateCloudRecord(id, {actualEnd:r.actualEnd, status:'done', shutdown:true});
     renderRecords(); renderHome();
     showModal('已确认','关机确认已记录。感谢您遵守共用管理规范！','确定',null,false);
   },true);
