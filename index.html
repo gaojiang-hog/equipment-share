@@ -130,7 +130,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
       <div class="header-title" id="pageTitle">设备状态</div>
       <span class="sync-badge sync-off" id="syncBadge"><span class="sync-dot"></span>本地模式</span>
     </div>
-    <div class="header-time" id="clock">--:--:--</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button id="btnRefresh" style="background:none;border:none;color:var(--blue);font-size:12px;cursor:pointer;padding:4px 8px;border-radius:4px;">🔄 刷新</button>
+      <div class="header-time" id="clock">--:--:--</div>
+    </div>
   </div>
   <div class="header-sub" id="pageSub">实时查看公辅设备使用状态</div>
 </div>
@@ -225,10 +228,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 
 <div class="page" id="page-config">
   <div class="config-box">
-    <div class="config-title">配置 Supabase 云端同步（可选）</div>
+    <div class="config-title">配置 Supabase 云端同步</div>
+    <div class="alert" id="cfgAlert"></div>
     <div class="config-hint" style="margin-bottom:12px;">
-      当前为<strong>本地模式</strong>，数据仅保存在本机浏览器中，多人无法共享。<br><br>
-      如需多人实时同步，请配置 Supabase（免费）：
+      <strong>本地模式</strong>：数据保存在本机浏览器，换设备/清缓存会丢失。<br><br>
+      <strong>云端模式</strong>：配置 Supabase 后，所有人数据实时同步，支持多人同时查看和登记。
     </div>
     <label style="font-size:12px;color:var(--secondary);">Supabase URL</label>
     <input type="text" class="config-input" id="cfgUrl" placeholder="如：https://xxxxx.supabase.co">
@@ -236,8 +240,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
     <input type="text" class="config-input" id="cfgKey" placeholder="如：eyJhbGciOiJIUzI1NiIs...">
     <button class="btn-primary" id="btnSaveConfig">保存并连接</button>
     <button class="btn-secondary" id="btnSkipConfig">暂不使用同步，继续本地模式</button>
-    <div class="config-hint">
-      没有账号？<a href="https://supabase.com" target="_blank" style="color:var(--blue);">点击注册 Supabase</a> → 创建项目 → 复制 URL 和 anon key
+    <div class="config-hint" style="margin-top:12px;">
+      <strong>配置步骤：</strong><br>
+      1. <a href="https://supabase.com" target="_blank" style="color:var(--blue);">注册 Supabase</a> 并创建项目<br>
+      2. 进入项目 → Settings → API → 复制 Project URL 和 anon key<br>
+      3. 在 SQL Editor 执行以下建表语句：<br>
+      <pre style="background:var(--light);padding:8px;border-radius:6px;font-size:11px;margin-top:6px;overflow-x:auto;">
+CREATE TABLE equipment_records (
+  id BIGINT PRIMARY KEY,
+  date TEXT, dept TEXT, user TEXT,
+  device TEXT, start TEXT, "end" TEXT,
+  actualend TEXT, note TEXT, status TEXT,
+  shutdown BOOLEAN DEFAULT false
+);
+CREATE TABLE equipment_devices (
+  id TEXT PRIMARY KEY,
+  name TEXT, color TEXT, builtin BOOLEAN
+);</pre>
     </div>
   </div>
 </div>
@@ -334,19 +353,29 @@ function sbHeaders(){
   };
 }
 function sbFetch(path, opts){
-  if(!SUP_URL || !SUP_KEY) return Promise.reject('未配置');
+  if(!SUP_URL || !SUP_KEY) return Promise.reject(new Error('未配置 Supabase'));
   var url = SUP_URL.replace(/\/$/,'') + '/rest/v1/' + path;
   opts = opts || {};
   opts.headers = sbHeaders();
   return fetch(url, opts).then(function(res){
-    if(!res.ok) throw new Error('HTTP '+res.status);
+    if(!res.ok){
+      if(res.status === 401) throw new Error('认证失败：API Key 无效');
+      if(res.status === 404) throw new Error('表不存在：请在 Supabase 中创建 equipment_records 和 equipment_devices 表');
+      if(res.status === 400) throw new Error('请求错误：'+res.statusText);
+      throw new Error('HTTP '+res.status+' '+res.statusText);
+    }
     return res.json();
+  }).catch(function(err){
+    if(err.message && err.message.indexOf('Failed to fetch') !== -1){
+      throw new Error('网络错误：无法连接到 Supabase，请检查 URL 是否正确');
+    }
+    throw err;
   });
 }
 
 function loadCloudRecords(){
   var today = fmtDate(new Date());
-  return sbFetch('equipment_records?date=eq.'+today+'&select=*&order=id.desc').then(function(data){
+  return sbFetch('equipment_records?select=*&order=id.desc&limit=200').then(function(data){
     records = (data || []).map(function(r){
       return {
         id: String(r.id), date: r.date, dept: r.dept, user: r.user,
@@ -378,7 +407,7 @@ function saveCloudRecord(rec){
     actualend: rec.actualEnd || null, note: rec.note || '', status: rec.status || 'future',
     shutdown: !!rec.shutdown
   });
-  return sbFetch('equipment_records', {method:'POST', body:body}).catch(function(e){
+  return sbFetch('equipment_records', {method:'POST', headers:Object.assign({},sbHeaders(),{'Prefer':'return=representation,resolution=merge-duplicates'}), body:body}).catch(function(e){
     console.error('save record', e);
   });
 }
@@ -753,23 +782,31 @@ for(var c=0;c<colorOpts.length;c++){
 function saveConfig(){
   var url=document.getElementById('cfgUrl').value.trim();
   var key=document.getElementById('cfgKey').value.trim();
-  if(!url||!key){ showAlert('regAlert','请填写完整的 Supabase 配置信息','warn'); return; }
-  SUP_URL=url; SUP_KEY=key;
+  if(!url||!key){ showAlert('cfgAlert','请填写完整的 Supabase 配置信息','warn'); return; }
+  applyConfig(url, key);
   safeSet('eqm_sup_cfg', JSON.stringify({url:SUP_URL, key:SUP_KEY}));
-  cloudReady=true;
-  updateSyncBadge(true);
-  loadCloudDevices().then(function(){ return loadCloudRecords(); }).then(function(){
-    showAlert('regAlert','云端连接成功！','ok');
-    startPolling();
-    setTimeout(function(){ goPage('home'); }, 800);
-  }).catch(function(e){
-    showAlert('regAlert','连接失败：'+e.message,'warn');
-    cloudReady=false; updateSyncBadge(false);
+
+  showAlert('cfgAlert','正在测试连接...','info');
+  testConnection().then(function(ok){
+    if(ok){
+      cloudReady=true; updateSyncBadge(true);
+      loadCloudDevices().then(function(){ return loadCloudRecords(); }).then(function(){
+        showAlert('cfgAlert','云端连接成功！数据已同步','ok');
+        startPolling();
+        setTimeout(function(){ goPage('home'); }, 800);
+      }).catch(function(e){
+        showAlert('regAlert','连接成功但加载数据失败：'+e.message,'warn');
+      });
+    } else {
+      showAlert('regAlert','连接失败：无法访问 Supabase，请检查 URL 和 Key 是否正确','warn');
+      cloudReady=false; updateSyncBadge(false);
+    }
   });
 }
 function skipConfig(){
   safeSet('eqm_sup_cfg', JSON.stringify({skipped:true}));
   goPage('home');
+  if(!initDone){ renderHome(); initDone = true; }
 }
 function updateSyncBadge(ok){
   var el=document.getElementById('syncBadge');
@@ -781,6 +818,18 @@ function updateSyncBadge(ok){
 document.getElementById('btnSubmitReg').onclick=submitReg;
 document.getElementById('btnAddDevice').onclick=addDev;
 document.getElementById('btnFab').onclick=function(){ goPage('register'); };
+document.getElementById('btnRefresh').onclick=function(){
+  if(cloudReady){
+    loadCloudRecords().then(function(){ loadCloudDevices(); }).then(function(){
+      refreshActivePages();
+      showModal('同步完成','数据已刷新','确定',null,false);
+    }).catch(function(e){
+      showModal('同步失败','云端连接异常：'+e.message,'确定',null,false);
+    });
+  } else {
+    showModal('本地模式','当前为本地模式，数据仅保存在本机。如需多设备同步，请前往"配置"页面设置 Supabase。','去配置',function(){ goPage('config'); },true);
+  }
+};
 document.getElementById('btnSaveConfig').onclick=saveConfig;
 document.getElementById('btnSkipConfig').onclick=skipConfig;
 
@@ -797,31 +846,58 @@ function updateClock(){
 setInterval(updateClock,1000); updateClock();
 
 /* ============================================================
-   启动逻辑：强制使用硬编码的云端配置，不再依赖 localStorage
+   启动逻辑：优先硬编码，失败则尝试 localStorage，再失败引导配置
    ============================================================ */
+function testConnection(){
+  return sbFetch('equipment_devices?select=id&limit=1').then(function(){ return true; }).catch(function(){ return false; });
+}
+function applyConfig(url, key){
+  SUP_URL = url; SUP_KEY = key;
+}
+function tryConnect(resolve){
+  if(!SUP_URL || !SUP_KEY){ resolve(false); return; }
+  testConnection().then(function(ok){
+    if(ok){
+      cloudReady = true; updateSyncBadge(true);
+      loadCloudDevices().then(function(){ return loadCloudRecords(); }).then(function(){
+        startPolling(); resolve(true);
+      }).catch(function(e){ console.error('加载数据失败', e); resolve(false); });
+    } else {
+      resolve(false);
+    }
+  });
+}
 function boot(){
   if(initDone) return;
-  loadDevices();
-  loadRecords();
+  loadDevices(); loadRecords();
 
-  // 强制使用硬编码配置，自动连接云端
-  if(SUP_URL && SUP_KEY){
-    cloudReady = true;
-    updateSyncBadge(true);
-    loadCloudDevices().then(function(){ return loadCloudRecords(); }).then(function(){
-      startPolling();
-      console.log('云端连接成功');
-    }).catch(function(e){
-      console.error('云端连接失败，回退到本地模式', e);
-      cloudReady = false;
-      updateSyncBadge(false);
-    });
-  } else {
-    updateSyncBadge(false);
-  }
+  // 步骤1：尝试硬编码配置
+  var hardcodedUrl = SUP_URL, hardcodedKey = SUP_KEY;
+  tryConnect(function(ok){
+    if(ok){ renderHome(); initDone = true; return; }
 
-  renderHome();
-  initDone = true;
+    // 步骤2：硬编码失败，尝试 localStorage
+    var raw = safeGet('eqm_sup_cfg');
+    if(raw){
+      try{
+        var cfg = JSON.parse(raw);
+        if(cfg.url && cfg.key && !cfg.skipped){
+          applyConfig(cfg.url, cfg.key);
+          tryConnect(function(ok2){
+            if(ok2){ renderHome(); initDone = true; }
+            else { showConfigPage(); }
+          });
+          return;
+        }
+      }catch(e){}
+    }
+    showConfigPage();
+  });
+}
+function showConfigPage(){
+  cloudReady = false; updateSyncBadge(false);
+  goPage('config');
+  renderHome(); initDone = true;
 }
 
 if(document.readyState==='loading'){
