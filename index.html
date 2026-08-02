@@ -228,35 +228,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica N
 
 <div class="page" id="page-config">
   <div class="config-box">
-    <div class="config-title">配置 Supabase 云端同步</div>
+    <div class="config-title">修改云端同步配置</div>
     <div class="alert" id="cfgAlert"></div>
     <div class="config-hint" style="margin-bottom:12px;">
-      <strong>本地模式</strong>：数据保存在本机浏览器，换设备/清缓存会丢失。<br><br>
-      <strong>云端模式</strong>：配置 Supabase 后，所有人数据实时同步，支持多人同时查看和登记。
+      <strong>当前状态：</strong><span id="cfgStatus">检测中...</span><br><br>
+      <strong>本地模式</strong>：数据保存在本机浏览器，换设备/清缓存会丢失。<br>
+      <strong>云端模式</strong>：数据实时同步，支持多人同时查看和登记。
     </div>
     <label style="font-size:12px;color:var(--secondary);">Supabase URL</label>
     <input type="text" class="config-input" id="cfgUrl" placeholder="如：https://xxxxx.supabase.co">
     <label style="font-size:12px;color:var(--secondary);">Supabase Anon Key</label>
     <input type="text" class="config-input" id="cfgKey" placeholder="如：eyJhbGciOiJIUzI1NiIs...">
-    <button class="btn-primary" id="btnSaveConfig">保存并连接</button>
-    <button class="btn-secondary" id="btnSkipConfig">暂不使用同步，继续本地模式</button>
+    <button class="btn-primary" id="btnSaveConfig">保存并切换</button>
+    <button class="btn-secondary" id="btnSkipConfig">断开云端，使用本地模式</button>
     <div class="config-hint" style="margin-top:12px;">
-      <strong>配置步骤：</strong><br>
+      <strong>如需更换云端项目：</strong><br>
       1. <a href="https://supabase.com" target="_blank" style="color:var(--blue);">注册 Supabase</a> 并创建项目<br>
       2. 进入项目 → Settings → API → 复制 Project URL 和 anon key<br>
       3. 在 SQL Editor 执行以下建表语句：<br>
       <pre style="background:var(--light);padding:8px;border-radius:6px;font-size:11px;margin-top:6px;overflow-x:auto;">
-CREATE TABLE equipment_records (
+-- 第1步：创建数据表
+CREATE TABLE IF NOT EXISTS equipment_records (
   id BIGINT PRIMARY KEY,
-  date TEXT, dept TEXT, user TEXT,
+  date TEXT, dept TEXT, "user" TEXT,
   device TEXT, start TEXT, "end" TEXT,
   actualend TEXT, note TEXT, status TEXT,
   shutdown BOOLEAN DEFAULT false
 );
-CREATE TABLE equipment_devices (
+CREATE TABLE IF NOT EXISTS equipment_devices (
   id TEXT PRIMARY KEY,
-  name TEXT, color TEXT, builtin BOOLEAN
-);</pre>
+  name TEXT, color TEXT, builtin BOOLEAN DEFAULT false
+);
+
+-- 第2步：关闭行级安全（关键！否则API返回空数据）
+ALTER TABLE equipment_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE equipment_devices DISABLE ROW LEVEL SECURITY;</pre>
     </div>
   </div>
 </div>
@@ -374,9 +380,8 @@ function sbFetch(path, opts){
 }
 
 function loadCloudRecords(){
-  var today = fmtDate(new Date());
-  return sbFetch('equipment_records?select=*&order=id.desc&limit=200').then(function(data){
-    records = (data || []).map(function(r){
+  return sbFetch('equipment_records?select=*&order=id.desc&limit=500').then(function(data){
+    var cloudRecs = (data || []).map(function(r){
       return {
         id: String(r.id), date: r.date, dept: r.dept, user: r.user,
         device: r.device, start: r.start, end: r.end,
@@ -384,20 +389,44 @@ function loadCloudRecords(){
         shutdown: !!r.shutdown
       };
     });
-    saveLocalRecords();
-    refreshActivePages();
-  }).catch(function(e){ console.error('load records', e); });
+
+    if(cloudRecs.length > 0){
+      // 云端有数据：以云端为准，合并本地独有的记录
+      var cloudIds = {};
+      cloudRecs.forEach(function(r){ cloudIds[r.id] = true; });
+      var localOnly = records.filter(function(r){ return !cloudIds[r.id]; });
+      records = cloudRecs.concat(localOnly);
+      saveLocalRecords();
+      refreshActivePages();
+      console.log('[云端同步] 加载 ' + cloudRecs.length + ' 条记录，合并 ' + localOnly.length + ' 条本地独有记录');
+    } else if(records.length > 0){
+      // 云端无数据但本地有：推送本地今日记录到云端
+      console.log('[云端同步] 云端无数据，推送本地 ' + records.length + ' 条记录...');
+      pushLocalRecordsToCloud();
+    }
+  }).catch(function(e){ 
+    console.error('[云端同步] 加载记录失败:', e); 
+  });
 }
 function loadCloudDevices(){
   return sbFetch('equipment_devices?select=*').then(function(data){
     var arr = data || [];
-    if(arr.length>0){
+    if(arr.length > 0){
+      // 云端有设备数据，以云端为准，但保留本地新增的自定义设备
+      var cloudIds = {};
+      arr.forEach(function(r){ cloudIds[r.id] = true; });
+      var localNew = devices.filter(function(d){ return !d.builtin && !cloudIds[d.id]; });
       devices = arr.map(function(r){
         return {id: r.id, name: r.name, color: r.color, builtin: !!r.builtin};
-      });
+      }).concat(localNew);
       saveLocalDevices();
+      console.log('[云端同步] 加载 ' + arr.length + ' 台设备');
+    } else if(devices.length > DEFAULT_DEVICES.length){
+      // 云端无设备但本地有新增，推送本地自定义设备
+      console.log('[云端同步] 云端无设备，推送本地自定义设备...');
+      devices.filter(function(d){ return !d.builtin; }).forEach(function(d){ saveCloudDevice(d); });
     }
-  }).catch(function(e){ console.error('load devices', e); });
+  }).catch(function(e){ console.error('[云端同步] 加载设备失败:', e); });
 }
 function saveCloudRecord(rec){
   var body = JSON.stringify({
@@ -407,8 +436,13 @@ function saveCloudRecord(rec){
     actualend: rec.actualEnd || null, note: rec.note || '', status: rec.status || 'future',
     shutdown: !!rec.shutdown
   });
-  return sbFetch('equipment_records', {method:'POST', headers:Object.assign({},sbHeaders(),{'Prefer':'return=representation,resolution=merge-duplicates'}), body:body}).catch(function(e){
-    console.error('save record', e);
+  var headers = sbHeaders();
+  headers['Prefer'] = 'return=representation,resolution=merge-duplicates';
+  return sbFetch('equipment_records', {method:'POST', headers:headers, body:body}).then(function(data){
+    console.log('[云端同步] 保存记录成功:', rec.id);
+    return data;
+  }).catch(function(e){
+    console.error('[云端同步] 保存记录失败:', e.message || e);
   });
 }
 function updateCloudRecord(id, updates){
@@ -417,16 +451,38 @@ function updateCloudRecord(id, updates){
     status: updates.status || 'done',
     shutdown: !!updates.shutdown
   });
-  return sbFetch('equipment_records?id=eq.'+id, {method:'PATCH', body:body}).catch(function(e){
-    console.error('update record', e);
+  return sbFetch('equipment_records?id=eq.'+id, {method:'PATCH', body:body}).then(function(data){
+    console.log('[云端同步] 更新记录成功:', id);
+    return data;
+  }).catch(function(e){
+    console.error('[云端同步] 更新记录失败:', e.message || e);
   });
 }
 function saveCloudDevice(dev){
   var body = JSON.stringify({id:dev.id, name:dev.name, color:dev.color, builtin:!!dev.builtin});
-  return sbFetch('equipment_devices', {method:'POST', body:body}).catch(function(e){ console.error(e); });
+  var headers = sbHeaders();
+  headers['Prefer'] = 'return=representation,resolution=merge-duplicates';
+  return sbFetch('equipment_devices', {method:'POST', headers:headers, body:body}).then(function(data){
+    console.log('[云端同步] 保存设备成功:', dev.name);
+    return data;
+  }).catch(function(e){ console.error('[云端同步] 保存设备失败:', e.message || e); });
 }
 function deleteCloudDevice(id){
-  return sbFetch('equipment_devices?id=eq.'+id, {method:'DELETE'}).catch(function(e){ console.error(e); });
+  return sbFetch('equipment_devices?id=eq.'+id, {method:'DELETE'}).then(function(data){
+    console.log('[云端同步] 删除设备成功:', id);
+    return data;
+  }).catch(function(e){ console.error('[云端同步] 删除设备失败:', e.message || e); });
+}
+function pushLocalRecordsToCloud(){
+  var today = fmtDate(new Date());
+  var todayRecs = records.filter(function(r){ return r.date === today; });
+  if(todayRecs.length === 0) return Promise.resolve();
+  console.log('[云端同步] 推送 ' + todayRecs.length + ' 条本地记录到云端...');
+  var p = Promise.resolve();
+  todayRecs.forEach(function(r){
+    p = p.then(function(){ return saveCloudRecord(r); });
+  });
+  return p;
 }
 function syncAllDevices(){
   return sbFetch('equipment_devices?select=*').then(function(data){
@@ -615,6 +671,7 @@ function goPage(name){
   if(name==='records') renderRecords();
   if(name==='register') initReg();
   if(name==='devices') renderDevList();
+  if(name==='config') updateCfgStatus();
 }
 
 function refreshActivePages(){
@@ -790,23 +847,44 @@ function saveConfig(){
   testConnection().then(function(ok){
     if(ok){
       cloudReady=true; updateSyncBadge(true);
-      loadCloudDevices().then(function(){ return loadCloudRecords(); }).then(function(){
+      loadCloudDevices().then(function(){ 
+        return loadCloudRecords(); 
+      }).then(function(){
+        return pushLocalRecordsToCloud();
+      }).then(function(){
         showAlert('cfgAlert','云端连接成功！数据已同步','ok');
         startPolling();
-        setTimeout(function(){ goPage('home'); }, 800);
+        updateCfgStatus();
       }).catch(function(e){
-        showAlert('regAlert','连接成功但加载数据失败：'+e.message,'warn');
+        showAlert('cfgAlert','连接成功但同步数据失败：'+(e.message || e),'warn');
+        updateCfgStatus();
       });
     } else {
-      showAlert('regAlert','连接失败：无法访问 Supabase，请检查 URL 和 Key 是否正确','warn');
+      showAlert('cfgAlert','连接失败：无法访问 Supabase，请检查 URL 和 Key 是否正确','warn');
       cloudReady=false; updateSyncBadge(false);
+      updateCfgStatus();
     }
+  }).catch(function(e){
+    showAlert('cfgAlert','连接异常：'+(e.message || e),'warn');
+    cloudReady=false; updateSyncBadge(false);
+    updateCfgStatus();
   });
 }
+function updateCfgStatus(){
+  var el = document.getElementById('cfgStatus');
+  if(!el) return;
+  if(cloudReady){
+    el.innerHTML = '<span style="color:var(--green)">✓ 云端同步中（' + (SUP_URL || '').replace('https://','').replace('.supabase.co','') + '）</span>';
+  } else {
+    el.innerHTML = '<span style="color:var(--muted)">本地模式（未连接云端）</span>';
+  }
+}
 function skipConfig(){
+  cloudReady = false;
+  updateSyncBadge(false);
+  if(syncTimer){ clearInterval(syncTimer); syncTimer = null; }
   safeSet('eqm_sup_cfg', JSON.stringify({skipped:true}));
-  goPage('home');
-  if(!initDone){ renderHome(); initDone = true; }
+  showModal('已切换','已断开云端连接，切换到本地模式。本地数据不受影响。','确定',null,false);
 }
 function updateSyncBadge(ok){
   var el=document.getElementById('syncBadge');
@@ -820,11 +898,16 @@ document.getElementById('btnAddDevice').onclick=addDev;
 document.getElementById('btnFab').onclick=function(){ goPage('register'); };
 document.getElementById('btnRefresh').onclick=function(){
   if(cloudReady){
-    loadCloudRecords().then(function(){ loadCloudDevices(); }).then(function(){
+    showModal('同步中','正在从云端同步数据...','确定',null,false);
+    loadCloudDevices().then(function(){ 
+      return loadCloudRecords(); 
+    }).then(function(){
       refreshActivePages();
-      showModal('同步完成','数据已刷新','确定',null,false);
+      closeModal();
+      showModal('同步完成','数据已刷新，共 ' + records.length + ' 条记录','确定',null,false);
     }).catch(function(e){
-      showModal('同步失败','云端连接异常：'+e.message,'确定',null,false);
+      closeModal();
+      showModal('同步失败','云端连接异常：'+(e.message || e),'确定',null,false);
     });
   } else {
     showModal('本地模式','当前为本地模式，数据仅保存在本机。如需多设备同步，请前往"配置"页面设置 Supabase。','去配置',function(){ goPage('config'); },true);
@@ -859,46 +942,67 @@ function tryConnect(resolve){
   testConnection().then(function(ok){
     if(ok){
       cloudReady = true; updateSyncBadge(true);
-      loadCloudDevices().then(function(){ return loadCloudRecords(); }).then(function(){
-        startPolling(); resolve(true);
-      }).catch(function(e){ console.error('加载数据失败', e); resolve(false); });
+      loadCloudDevices().then(function(){ 
+        return loadCloudRecords(); 
+      }).then(function(){
+        startPolling(); 
+        if(resolve) resolve(true);
+      }).catch(function(e){ 
+        console.error('[云端同步] 加载数据失败:', e); 
+        cloudReady = false; updateSyncBadge(false);
+        if(resolve) resolve(false); 
+      });
     } else {
-      resolve(false);
+      if(resolve) resolve(false);
     }
+  }).catch(function(e){
+    console.error('[云端同步] 连接测试失败:', e);
+    cloudReady = false; updateSyncBadge(false);
+    if(resolve) resolve(false);
   });
 }
 function boot(){
   if(initDone) return;
   loadDevices(); loadRecords();
+  renderHome(); // 先渲染本地数据，避免空白
+  initDone = true;
 
-  // 步骤1：尝试硬编码配置
-  var hardcodedUrl = SUP_URL, hardcodedKey = SUP_KEY;
+  // 自动连接云端（硬编码配置优先）
+  if(!SUP_URL || !SUP_KEY){
+    console.log('[启动] 无硬编码配置，使用本地模式');
+    updateSyncBadge(false);
+    return;
+  }
+
+  console.log('[启动] 正在连接云端...');
   tryConnect(function(ok){
-    if(ok){ renderHome(); initDone = true; return; }
-
-    // 步骤2：硬编码失败，尝试 localStorage
+    if(ok){
+      console.log('[启动] 云端连接成功，进入同步模式');
+      return;
+    }
+    // 硬编码失败，尝试 localStorage 中的备用配置
     var raw = safeGet('eqm_sup_cfg');
     if(raw){
       try{
         var cfg = JSON.parse(raw);
         if(cfg.url && cfg.key && !cfg.skipped){
+          console.log('[启动] 尝试备用配置...');
           applyConfig(cfg.url, cfg.key);
           tryConnect(function(ok2){
-            if(ok2){ renderHome(); initDone = true; }
-            else { showConfigPage(); }
+            if(ok2){
+              console.log('[启动] 备用配置连接成功');
+            } else {
+              console.log('[启动] 备用配置也失败，使用本地模式');
+            }
           });
           return;
         }
       }catch(e){}
     }
-    showConfigPage();
+    console.log('[启动] 云端连接失败，已回退到本地模式');
   });
 }
-function showConfigPage(){
-  cloudReady = false; updateSyncBadge(false);
-  goPage('config');
-  renderHome(); initDone = true;
-}
+
 
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded', boot);
@@ -913,6 +1017,11 @@ setTimeout(function(){
     if(!records||records.length===0) insertDemo();
     renderHome(); initDone=true;
   }
+  // 预填配置页面的当前配置
+  var cfgUrl = document.getElementById('cfgUrl');
+  var cfgKey = document.getElementById('cfgKey');
+  if(cfgUrl && SUP_URL) cfgUrl.value = SUP_URL;
+  if(cfgKey && SUP_KEY) cfgKey.value = SUP_KEY;
 },3000);
 
 setInterval(function(){
